@@ -20,5 +20,5 @@ ENTRYPOINT ["python3", "-m", "uvicorn", "main:app", "--proxy-headers", "--host",
 
 EXPOSE 80
 
-HEALTHCHECK --interval=5m --timeout=3s \
-    CMD curl -f http://localhost/healthcheck || exit 1
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s \
+    CMD curl --insecure --fail --silent --show-error http://localhost/healthcheck || exit 1
