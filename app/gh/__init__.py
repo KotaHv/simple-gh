@@ -10,10 +10,12 @@ router = APIRouter()
 
 @router.get("/{github_path:path}", response_class=PlainTextResponse)
 async def get_gh(request: Request, github_path: str, token: str | None = None):
-    logger.info(f"IP Address: {request.client.host} - request url: {request.url}")
+    logger.info(
+        f"IP Address: {request.headers.get('X-Forwarded-For',request.client.host)} - request url: {request.url}"
+    )
     if token != settings.token:
         logger.error(
-            f"IP Address: {request.client.host} - request url: {request.url} - headers:{request.headers}"
+            f"IP Address: {request.headers.get('X-Forwarded-For',request.client.host)} - request url: {request.url} - headers:{request.headers}"
         )
         raise HTTPException(status_code=404, detail="not found")
     url = "https://raw.githubusercontent.com/" + github_path
