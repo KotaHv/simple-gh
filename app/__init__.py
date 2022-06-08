@@ -1,11 +1,13 @@
 import httpx
 from fastapi import FastAPI
 
+from .config import settings
+
 client = httpx.AsyncClient()
 
 
 def create_app():
-    app = FastAPI()
+    app = FastAPI(openapi_url=settings.openapi_url)
     app.add_event_handler("shutdown", close_httpx_client)
     mount(app)
     return app
