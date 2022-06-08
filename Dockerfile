@@ -16,4 +16,6 @@ WORKDIR /opt/simple-gh
 
 COPY . .
 
-ENTRYPOINT uvicorn main:app --port=12345
+ENTRYPOINT ["python3", "-m", "uvicorn", "main:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "80"]
+
+EXPOSE 80
