@@ -25,4 +25,4 @@ async def close_httpx_client():
 def mount(app: FastAPI):
     from . import gh
 
-    app.mount("/gh", gh.router)
+    app.include_router(gh.router, prefix="/gh")
