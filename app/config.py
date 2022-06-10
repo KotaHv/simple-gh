@@ -1,4 +1,6 @@
-from pydantic import BaseSettings, ByteSize, DirectoryPath
+from pathlib import Path
+
+from pydantic import BaseSettings, ByteSize
 
 DEFAULT_DATA_DIR = "data"
 DEFAULT_LOG_DIR = DEFAULT_DATA_DIR + "/logs"
@@ -14,9 +16,9 @@ class Settings(BaseSettings):
     file_max: ByteSize = 20 * 1024 * 1024
     cache_time: int = 60 * 60 * 24
 
-    data_dir: DirectoryPath = DEFAULT_DATA_DIR
-    log_dir: DirectoryPath = DEFAULT_LOG_DIR
-    cache_dir: DirectoryPath = DEFAULT_CACHE_DIR
+    data_dir: Path = DEFAULT_DATA_DIR
+    log_dir: Path = DEFAULT_LOG_DIR
+    cache_dir: Path = DEFAULT_CACHE_DIR
 
     class Config:
         env_prefix = "simple_gh_"  # defaults to no prefix
