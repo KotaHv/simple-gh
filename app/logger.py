@@ -14,10 +14,7 @@ _logger.remove()
 
 
 def Log(prefix: str) -> _logger:
-    basedir = Path(__file__).parent.parent
-
-    # 定位到log日志文件
-    log_path = basedir / "logs"
+    log_path = Path(settings.log_dir)
 
     log_path.mkdir(parents=True, exist_ok=True)
 
