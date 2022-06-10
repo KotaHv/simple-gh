@@ -7,7 +7,7 @@ DEFAULT_CACHE_DIR = DEFAULT_DATA_DIR + "/cache"
 
 class Settings(BaseSettings):
     token: str | None = None
-    openapi_url: str = "/openapi.json"
+    openapi_url: str = ""
     title: str = "simple_gh"
 
     max_cache: ByteSize = "512MiB"
