@@ -1,5 +1,4 @@
 import time
-from pathlib import Path
 
 import aiofiles
 from fastapi import APIRouter, Request, HTTPException
@@ -10,7 +9,7 @@ from ..config import settings
 from ..logger import logger
 
 router = APIRouter()
-cache_dir = Path(settings.cache_dir)
+cache_dir = settings.cache_dir
 cache_dir.mkdir(parents=True, exist_ok=True)
 
 
