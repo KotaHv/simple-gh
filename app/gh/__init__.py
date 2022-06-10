@@ -49,11 +49,14 @@ async def get_gh(request: Request, github_path: str, token: str | None = None):
 
     url = "https://raw.githubusercontent.com/" + github_path
     response = await client.get(url, timeout=5)
-    cache_size += (
+    file_size = (
         int(response.headers["content-length"])
         if response.headers.get("content-encoding") != "gzip"
         else len(response.content)
     )
+    if file_size > settings.file_max:
+        return Response(content=response.content)
+    cache_size += file_size
     if cache_size > settings.max_cache:
         files = [file for file in cache_dir.iterdir() if file != filepath]
         files.sort(key=lambda file: file.stat().st_ctime)
