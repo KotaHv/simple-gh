@@ -11,10 +11,11 @@ class Settings(BaseSettings):
     title: str = "simple_gh"
 
     max_cache: int = 1024 * 1024 * 512
+    cache_time: int = 60 * 60 * 24
+
     data_dir: str = DEFAULT_DATA_DIR
     log_dir: str = DEFAULT_LOG_DIR
     cache_dir: str = DEFAULT_CACHE_DIR
-    
 
     class Config:
         env_prefix = "simple_gh_"  # defaults to no prefix

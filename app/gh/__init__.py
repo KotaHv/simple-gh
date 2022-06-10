@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import aiofiles
@@ -25,8 +26,11 @@ async def get_gh(request: Request, github_path: str, token: str | None = None):
         raise HTTPException(status_code=404, detail="not found")
     filepath = cache_dir / github_path.replace("/", "_")
     try:
-        async with aiofiles.open(filepath, "rb") as f:
-            return Response(content=await f.read())
+        stat = filepath.stat()
+        if time.time() - stat.st_ctime <= settings.cache_time:
+            async with aiofiles.open(filepath, "rb") as f:
+                return Response(content=await f.read())
+        logger.info(f"{github_path} cache has expired")
     except FileNotFoundError:
         pass
     url = "https://raw.githubusercontent.com/" + github_path
