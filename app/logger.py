@@ -1,5 +1,4 @@
 import sys
-import copy
 
 from loguru import logger as _logger
 
@@ -16,10 +15,9 @@ def Log(prefix: str) -> _logger:
 
     file_path = settings.log_dir / f"{prefix}.log"
     format = f"<green>{{time:YYYY-MM-DD HH:mm:ss.SSS}}</green> | <level>{{level: <8}}</level> | <cyan>{{name}}</cyan>:<cyan>{{function}}</cyan>:<cyan>{{line}}</cyan> | <fg #FFC0CB>{prefix}</fg #FFC0CB> - <level>{{message}}</level>"
-    logger = copy.deepcopy(_logger)
-    logger.add(sys.stdout, format=format)
-    logger.add(file_path, format=format, rotation="00:00", retention="30 days")
-    return logger
+    _logger.add(sys.stdout, format=format)
+    _logger.add(file_path, format=format, rotation="00:00", retention="30 days")
+    return _logger
 
 
 logger = Log(settings.title)

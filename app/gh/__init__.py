@@ -1,10 +1,10 @@
 import time
 
+import httpx
 import aiofiles
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import Response
 
-from .. import client
 from ..config import settings
 from ..logger import logger
 
@@ -21,6 +21,7 @@ def get_cache_size():
 
 
 cache_size = get_cache_size()
+client = httpx.AsyncClient(base_url="https://raw.githubusercontent.com", timeout=5)
 
 
 @router.get("/{github_path:path}")
@@ -46,8 +47,7 @@ async def get_gh(request: Request, github_path: str, token: str | None = None):
     except FileNotFoundError:
         pass
 
-    url = "https://raw.githubusercontent.com/" + github_path
-    response = await client.get(url, timeout=5)
+    response = await client.get(github_path)
     file_size = (
         int(response.headers["content-length"])
         if response.headers.get("content-encoding") != "gzip"

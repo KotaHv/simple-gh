@@ -1,9 +1,7 @@
-import httpx
 from fastapi import FastAPI
 
 from .config import settings
-
-client = httpx.AsyncClient()
+from . import gh
 
 
 def create_app():
@@ -19,10 +17,9 @@ def create_app():
 
 
 async def close_httpx_client():
-    await client.aclose()
+    await gh.client.aclose()
 
 
 def mount(app: FastAPI):
-    from . import gh
 
     app.include_router(gh.router, prefix="/gh")
