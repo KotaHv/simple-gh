@@ -7,7 +7,7 @@ from . import gh
 def create_app():
     app = FastAPI(openapi_url=settings.openapi_url)
     app.add_event_handler("shutdown", close_httpx_client)
-    mount(app)
+    app.include_router(gh.router, prefix="/gh")
 
     @app.get("/healthcheck")
     async def healthcheck():
@@ -18,8 +18,3 @@ def create_app():
 
 async def close_httpx_client():
     await gh.client.aclose()
-
-
-def mount(app: FastAPI):
-
-    app.include_router(gh.router, prefix="/gh")
