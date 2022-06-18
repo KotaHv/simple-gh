@@ -6,7 +6,11 @@ FROM python:3.10 AS install
 
 COPY requirements.txt .
 
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt --no-binary pydantic
+
+RUN rm -rf /usr/local/lib/python3.10/site-packages/pip*
+
+RUN rm -rf /usr/local/lib/python3.10/site-packages/setuptools*
 
 FROM base
 
