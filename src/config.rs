@@ -6,16 +6,19 @@ pub struct Config {
     pub cache_path: PathBuf,
     pub file_max: u128,
     pub cache_time: u32,
+    pub token: String,
 }
 
 pub fn init_config() -> Config {
     let cache_path = Config::cache_path();
     let file_max = Config::file_max();
     let cache_time = Config::cache_time();
+    let token = Config::token();
     Config {
         cache_path,
         file_max,
         cache_time,
+        token,
     }
 }
 
@@ -37,5 +40,8 @@ impl Config {
     fn cache_time() -> u32 {
         let cache_time = dotenvy::var("SIMPLE_GH_CACHE_TIME").unwrap_or((60 * 60 * 24).to_string());
         cache_time.parse().unwrap()
+    }
+    fn token() -> String {
+        dotenvy::var("SIMPLE_GH_TOKEN").unwrap_or("".to_string())
     }
 }

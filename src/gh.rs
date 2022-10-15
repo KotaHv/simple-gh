@@ -4,8 +4,9 @@ use byte_unit::Byte;
 use rocket::{
     fs::NamedFile,
     http::{ContentType, Status},
+    request::{self, FromRequest},
     tokio::fs::write,
-    Route, State,
+    Request, Route, State,
 };
 
 use crate::config::Config;
@@ -26,6 +27,7 @@ async fn get_gh(
     github_path: PathBuf,
     client: &State<reqwest::Client>,
     config: &State<Config>,
+    _token: Token,
 ) -> (Status, GhResponse) {
     let file_str = github_path.to_str().unwrap().replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
@@ -84,6 +86,42 @@ async fn get_gh(
                 status_code,
                 GhResponse::Spider(data, ContentType::new(content_type_string, "")),
             )
+        }
+    }
+}
+
+struct Token();
+#[derive(Debug)]
+enum TokenError {
+    Missing,
+    Invalid,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for Token {
+    type Error = TokenError;
+    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        let config = request.guard::<&State<Config>>().await.unwrap();
+        let token = &config.token;
+        if token == "" {
+            debug!("Token not set");
+            return request::Outcome::Success(Token());
+        }
+        match request.query_value::<String>("token") {
+            Some(token_result) => match token_result {
+                Ok(query_token) => {
+                    if token == &query_token {
+                        request::Outcome::Success(Token())
+                    } else {
+                        request::Outcome::Failure((Status::NotFound, TokenError::Invalid))
+                    }
+                }
+                Err(e) => {
+                    error!(target: "token", "{}", e);
+                    request::Outcome::Failure((Status::NotFound, TokenError::Invalid))
+                }
+            },
+            None => request::Outcome::Failure((Status::NotFound, TokenError::Missing)),
         }
     }
 }
