@@ -76,9 +76,9 @@ impl Fairing for Logging {
     }
 }
 
-pub struct BackGroundTask();
+pub struct BackgroundTask();
 #[rocket::async_trait]
-impl Fairing for BackGroundTask {
+impl Fairing for BackgroundTask {
     fn info(&self) -> Info {
         Info {
             name: "Background Task",

@@ -9,7 +9,7 @@ extern crate rocket;
 extern crate log;
 
 mod config;
-mod fairings;
+mod fairing;
 mod gh;
 mod util;
 
@@ -61,6 +61,6 @@ fn rocket() -> _ {
         .mount("/gh", gh::routes())
         .manage(create_client())
         .manage(config::init_config())
-        .attach(fairings::Logging())
-        .attach(fairings::BackGroundTask())
+        .attach(fairing::Logging())
+        .attach(fairing::BackgroundTask())
 }
