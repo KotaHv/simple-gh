@@ -5,18 +5,27 @@ use std::path::{Path, PathBuf};
 pub struct Config {
     pub cache_path: PathBuf,
     pub file_max: u128,
+    pub max_cache: u128,
     pub cache_time: u32,
     pub token: String,
 }
 
 pub fn init_config() -> Config {
     let cache_path = Config::cache_path();
-    let file_max = Config::file_max();
+    let (file_max, file_max_str) = Config::file_max();
+    let (max_cache, max_cache_str) = Config::max_cache();
+    if file_max > max_cache {
+        panic!(
+            "SIMPLE_GH_FILE_MAX({}) cannot be greater than SIMPLE_GH_MAX_CACHE({})",
+            file_max_str, max_cache_str
+        );
+    }
     let cache_time = Config::cache_time();
     let token = Config::token();
     Config {
         cache_path,
         file_max,
+        max_cache,
         cache_time,
         token,
     }
@@ -32,10 +41,19 @@ impl Config {
         }
         cache_path.to_owned()
     }
-    fn file_max() -> u128 {
+    fn file_max() -> (u128, String) {
         let file_max_str = dotenvy::var("SIMPLE_GH_FILE_MAX").unwrap_or("24MiB".to_string());
-        let file_max = byte_unit::Byte::from_str(file_max_str).unwrap().get_bytes();
-        file_max
+        let file_max = byte_unit::Byte::from_str(&file_max_str)
+            .unwrap()
+            .get_bytes();
+        (file_max, file_max_str)
+    }
+    fn max_cache() -> (u128, String) {
+        let max_cache_str = dotenvy::var("SIMPLE_GH_MAX_CACHE").unwrap_or("512MiB".to_string());
+        let max_cache = byte_unit::Byte::from_str(&max_cache_str)
+            .unwrap()
+            .get_bytes();
+        (max_cache, max_cache_str)
     }
     fn cache_time() -> u32 {
         let cache_time = dotenvy::var("SIMPLE_GH_CACHE_TIME").unwrap_or((60 * 60 * 24).to_string());

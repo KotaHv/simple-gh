@@ -2,7 +2,9 @@ use std::io::ErrorKind;
 
 use rocket::{
     fairing::{Fairing, Info, Kind},
-    tokio, Data, Orbit, Request, Response, Rocket,
+    tokio::{self, fs::DirEntry},
+    yansi::Paint,
+    Data, Orbit, Request, Response, Rocket,
 };
 
 use crate::config::Config;
@@ -25,19 +27,19 @@ impl Fairing for Logging {
         routes.sort_by_key(|r| r.uri.path());
         for route in routes {
             if route.rank < 0 {
-                info!(target: "routes", "{:<6} {}", route.method, route.uri);
+                info!(target: "routes", "{:<6} {}", Paint::green(&route.method), Paint::blue(&route.uri));
             } else {
-                info!(target: "routes", "{:<6} {} [{}]", route.method, route.uri, route.rank);
+                info!(target: "routes", "{:<6} {} [{}]", Paint::green(&route.method), Paint::blue(&route.uri), Paint::cyan(&route.rank));
             }
         }
 
         let config = rocket.config();
         let addr = format!("http://{}:{}", &config.address, &config.port);
-        info!(target: "start", "Rocket has launched from {}", addr);
+        info!(target: "start", "Rocket has launched from {}", Paint::blue(addr));
     }
 
     async fn on_request(&self, request: &mut Request<'_>, _data: &mut Data<'_>) {
-        let method = request.method();
+        let method = Paint::green(request.method());
         let uri = request.uri();
         let uri_path = uri.path();
         let uri_path_str = uri_path.url_decode_lossy();
@@ -47,16 +49,17 @@ impl Fairing for Logging {
         {
             return;
         }
-        let ip = get_ip(request);
+        let ip = Paint::cyan(get_ip(request));
         match uri.query() {
             Some(q) => {
-                info!(target: "request", "{} {} {}?{}", ip, method, uri_path_str, &q[..q.len().min(30)])
+                info!(target: "request", "{} {} {}?{}", ip, method, Paint::blue(uri_path_str), Paint::blue(&q[..q.len().min(30)]))
             }
-            None => info!(target: "request", "{} {} {}", ip, method, uri_path_str),
+            None => info!(target: "request", "{} {} {}", ip, method, Paint::blue(uri_path_str)),
         };
     }
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
+        let method = Paint::green(request.method());
         let uri = request.uri();
         let uri_path = uri.path();
         let uri_path_str = uri_path.url_decode_lossy();
@@ -66,13 +69,16 @@ impl Fairing for Logging {
         {
             return;
         }
-        let ip = get_ip(request);
-        let status = response.status();
-        if let Some(ref route) = request.route() {
-            info!(target: "response", "{} {} => {}", ip, route, status)
-        } else {
-            info!(target: "response", "{} {}", ip, status)
-        }
+        let ip = Paint::cyan(get_ip(request));
+        let status = Paint::yellow(response.status());
+        match uri.query() {
+            Some(q) => {
+                info!(target: "response", "{} {} {}?{} => {}", ip, method, Paint::blue(uri_path_str), Paint::blue(&q[..q.len().min(30)]), status)
+            }
+            None => {
+                info!(target: "response", "{} {} {} => {}", ip, method, Paint::blue(uri_path_str), status)
+            }
+        };
     }
 }
 
@@ -96,6 +102,9 @@ impl Fairing for BackgroundTask {
             loop {
                 match tokio::fs::read_dir(&cache_path).await {
                     Ok(mut entries) => {
+                        let mut cache_size: u128 = 0;
+                        let mut files: Vec<(DirEntry, chrono::DateTime<chrono::Utc>, u128)> =
+                            Vec::new();
                         while let Some(entry) = entries.next_entry().await.unwrap() {
                             let metadata = entry.metadata().await.unwrap();
                             if metadata.is_file() {
@@ -110,6 +119,24 @@ impl Fairing for BackgroundTask {
                                         cache_time
                                     );
                                     tokio::fs::remove_file(entry.path()).await.ok();
+                                    continue;
+                                }
+                                let file_size = metadata.len() as u128;
+                                cache_size += file_size;
+                                files.push((entry, create_date, file_size));
+                            }
+                        }
+                        if cache_size > config.max_cache {
+                            warn!("Exceed the maximum cache");
+                            debug!("{:?}", files);
+                            files.sort_by(|a, b| a.1.cmp(&b.1));
+                            debug!("{:?}", files);
+                            for (file, _, size) in files.iter() {
+                                warn!("delete file {:?}", file.file_name());
+                                tokio::fs::remove_file(file.path()).await.ok();
+                                cache_size -= size;
+                                if cache_size <= config.max_cache {
+                                    break;
                                 }
                             }
                         }
