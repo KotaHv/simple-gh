@@ -1,8 +1,11 @@
+use std::io::ErrorKind;
+
 use rocket::{
     fairing::{Fairing, Info, Kind},
-    Data, Orbit, Request, Response, Rocket,
+    tokio, Data, Orbit, Request, Response, Rocket,
 };
 
+use crate::config::Config;
 use crate::util::get_ip;
 
 const LOGGING_ROUTE_BLACKLIST: [&str; 1] = ["/alive"];
@@ -70,5 +73,57 @@ impl Fairing for Logging {
         } else {
             info!(target: "response", "{} {}", ip, status)
         }
+    }
+}
+
+pub struct BackGroundTask();
+#[rocket::async_trait]
+impl Fairing for BackGroundTask {
+    fn info(&self) -> Info {
+        Info {
+            name: "Background Task",
+            kind: Kind::Liftoff,
+        }
+    }
+
+    async fn on_liftoff(&self, rocket: &Rocket<Orbit>) {
+        info!(target:"BackGroundTask","Starting Backgroud Task");
+        let config = rocket.state::<Config>().unwrap().clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
+            let cache_time = chrono::Duration::seconds(config.cache_time as i64);
+            let cache_path = config.cache_path;
+            loop {
+                match tokio::fs::read_dir(&cache_path).await {
+                    Ok(mut entries) => {
+                        while let Some(entry) = entries.next_entry().await.unwrap() {
+                            let metadata = entry.metadata().await.unwrap();
+                            if metadata.is_file() {
+                                let create_date =
+                                    chrono::DateTime::from(metadata.created().unwrap());
+                                let duration = chrono::Utc::now() - create_date;
+                                if duration > cache_time {
+                                    warn!(target:"BackGroundTask",
+                                        "{:?} cache has expired, {:?} > {:?}",
+                                        entry.file_name(),
+                                        duration,
+                                        cache_time
+                                    );
+                                    tokio::fs::remove_file(entry.path()).await.ok();
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("{}:{}", e.kind(), e);
+                        if e.kind() == ErrorKind::NotFound {
+                            error!("mkdir: {:?}", cache_path);
+                            tokio::fs::create_dir_all(&cache_path).await.ok();
+                        }
+                    }
+                }
+                interval.tick().await;
+            }
+        });
     }
 }
