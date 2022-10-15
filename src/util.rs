@@ -1,3 +1,5 @@
+use rocket::Request;
+
 pub fn content_type(res: &reqwest::Response) -> Result<(String, String), String> {
     let content_type_string = res
         .headers()
@@ -12,4 +14,13 @@ pub fn content_type(res: &reqwest::Response) -> Result<(String, String), String>
     } else {
         Err(content_type_string)
     }
+}
+
+pub fn get_ip(request: &Request) -> String {
+    let mut ip = "Unknown".to_string();
+    let ip_option = request.client_ip();
+    if ip_option.is_some() {
+        ip = ip_option.unwrap().to_string();
+    }
+    ip
 }

@@ -10,6 +10,7 @@ extern crate rocket;
 extern crate log;
 
 mod config;
+mod fairings;
 mod gh;
 mod util;
 
@@ -23,7 +24,9 @@ fn alive() -> String {
 }
 
 fn launch_info() {
-    println!("Starting Simple-Gh");
+    println!();
+    println!("=================== Starting Simple-Gh ===================");
+    println!();
 }
 
 fn init_logger() {
@@ -35,7 +38,7 @@ fn init_logger() {
             writeln!(
                 buf,
                 "[{}][{}][{}]: {}",
-                chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S.%3f"),
                 record.target(),
                 record.level(),
                 record.args()
@@ -61,7 +64,6 @@ fn rocket() -> _ {
         let cache_time = chrono::Duration::seconds(config_clone.cache_time as i64);
         let cache_path = config_clone.cache_path;
         loop {
-            // let mut entries_rust = tokio::fs::read_dir(&cache_path).await;
             match tokio::fs::read_dir(&cache_path).await {
                 Ok(mut entries) => {
                     while let Some(entry) = entries.next_entry().await.unwrap() {
@@ -89,7 +91,6 @@ fn rocket() -> _ {
                     }
                 }
             }
-
             interval.tick().await;
         }
     });
@@ -98,4 +99,5 @@ fn rocket() -> _ {
         .mount("/gh", gh::routes())
         .manage(create_client())
         .manage(config_state)
+        .attach(fairings::Logging())
 }
