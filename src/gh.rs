@@ -32,7 +32,7 @@ async fn get_gh(
     let file_str = github_path.to_str().unwrap().replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
     if filepath.exists() {
-        info!("{} is exists", &file_str);
+        debug!("{} is exists", &file_str);
         return (
             Status::Ok,
             GhResponse::File(NamedFile::open(&filepath).await.ok()),
