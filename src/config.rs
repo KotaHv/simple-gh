@@ -1,17 +1,21 @@
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 
+#[derive(Clone, Debug)]
 pub struct Config {
     pub cache_path: PathBuf,
     pub file_max: u128,
+    pub cache_time: u32,
 }
 
 pub fn init_config() -> Config {
     let cache_path = Config::cache_path();
     let file_max = Config::file_max();
+    let cache_time = Config::cache_time();
     Config {
         cache_path,
         file_max,
+        cache_time,
     }
 }
 
@@ -29,5 +33,9 @@ impl Config {
         let file_max_str = dotenvy::var("SIMPLE_GH_FILE_MAX").unwrap_or("24MiB".to_string());
         let file_max = byte_unit::Byte::from_str(file_max_str).unwrap().get_bytes();
         file_max
+    }
+    fn cache_time() -> u32 {
+        let cache_time = dotenvy::var("SIMPLE_GH_CACHE_TIME").unwrap_or((60 * 60 * 24).to_string());
+        cache_time.parse().unwrap()
     }
 }

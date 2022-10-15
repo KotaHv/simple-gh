@@ -53,7 +53,7 @@ async fn get_gh(
     if is_success {
         if let Some(content_length) = content_length_option {
             if content_length as u128 <= config.file_max {
-                write(&filepath, &data).await.unwrap();
+                write(&filepath, &data).await.ok();
             } else {
                 warn!(
                     "{} content-length:{} > {}",
