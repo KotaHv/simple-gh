@@ -108,8 +108,9 @@ impl Fairing for BackgroundTask {
                         while let Some(entry) = entries.next_entry().await.unwrap() {
                             let metadata = entry.metadata().await.unwrap();
                             if metadata.is_file() {
-                                let create_date =
-                                    chrono::DateTime::from(metadata.created().unwrap());
+                                let create_date = chrono::DateTime::from(
+                                    metadata.created().unwrap_or(metadata.modified().unwrap()),
+                                );
                                 let duration = chrono::Utc::now() - create_date;
                                 if duration > cache_time {
                                     warn!(target:"BackGroundTask",
@@ -142,7 +143,7 @@ impl Fairing for BackgroundTask {
                         }
                     }
                     Err(e) => {
-                        error!("{}:{}", e.kind(), e);
+                        error!("{:?}:{}", e.kind(), e);
                         if e.kind() == ErrorKind::NotFound {
                             error!("mkdir: {:?}", cache_path);
                             tokio::fs::create_dir_all(&cache_path).await.ok();
