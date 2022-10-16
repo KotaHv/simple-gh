@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug)]
 pub struct Config {
     pub cache_path: PathBuf,
-    pub file_max: u128,
-    pub max_cache: u128,
+    pub file_max: u64,
+    pub max_cache: u64,
     pub cache_time: u32,
     pub token: String,
 }
@@ -41,14 +41,14 @@ impl Config {
         }
         cache_path.to_owned()
     }
-    fn file_max() -> (u128, String) {
+    fn file_max() -> (u64, String) {
         let file_max_str = dotenvy::var("SIMPLE_GH_FILE_MAX").unwrap_or("24MiB".to_string());
         let file_max = byte_unit::Byte::from_str(&file_max_str)
             .unwrap()
             .get_bytes();
         (file_max, file_max_str)
     }
-    fn max_cache() -> (u128, String) {
+    fn max_cache() -> (u64, String) {
         let max_cache_str = dotenvy::var("SIMPLE_GH_MAX_CACHE").unwrap_or("512MiB".to_string());
         let max_cache = byte_unit::Byte::from_str(&max_cache_str)
             .unwrap()

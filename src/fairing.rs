@@ -102,8 +102,8 @@ impl Fairing for BackgroundTask {
             loop {
                 match tokio::fs::read_dir(&cache_path).await {
                     Ok(mut entries) => {
-                        let mut cache_size: u128 = 0;
-                        let mut files: Vec<(DirEntry, chrono::DateTime<chrono::Utc>, u128)> =
+                        let mut cache_size = 0;
+                        let mut files: Vec<(DirEntry, chrono::DateTime<chrono::Utc>, u64)> =
                             Vec::new();
                         while let Some(entry) = entries.next_entry().await.unwrap() {
                             let metadata = entry.metadata().await.unwrap();
@@ -122,7 +122,7 @@ impl Fairing for BackgroundTask {
                                     tokio::fs::remove_file(entry.path()).await.ok();
                                     continue;
                                 }
-                                let file_size = metadata.len() as u128;
+                                let file_size = metadata.len();
                                 cache_size += file_size;
                                 files.push((entry, create_date, file_size));
                             }

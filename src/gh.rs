@@ -54,13 +54,13 @@ async fn get_gh(
     let data: Vec<u8> = content.to_vec();
     if is_success {
         if let Some(content_length) = content_length_option {
-            if content_length as u128 <= config.file_max {
+            if content_length <= config.file_max {
                 write(&filepath, &data).await.ok();
             } else {
                 warn!(
                     "{} content-length:{} > {}",
                     &file_str,
-                    Byte::from_bytes(content_length as u128)
+                    Byte::from_bytes(content_length)
                         .get_appropriate_unit(true)
                         .to_string(),
                     Byte::from_bytes(config.file_max)
