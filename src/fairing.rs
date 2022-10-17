@@ -70,15 +70,18 @@ impl Fairing for Logging {
             return;
         }
         let ip = Paint::cyan(get_ip(request));
+        let mut query = "".to_string();
+        if let Some(q) = uri.query() {
+            query = format!("?{}", q.as_str());
+        }
+        let uri_path_query = Paint::blue(uri_path_str.to_string() + &query);
         let status = Paint::yellow(response.status());
-        match uri.query() {
-            Some(q) => {
-                info!(target: "response", "{} {} {}?{} => {}", ip, method, Paint::blue(uri_path_str), Paint::blue(&q[..q.len().min(30)]), status)
-            }
-            None => {
-                info!(target: "response", "{} {} {} => {}", ip, method, Paint::blue(uri_path_str), status)
-            }
-        };
+        if status.inner().code >= 400 {
+            let ua = Paint::yellow(request.headers().get_one("user-agent").unwrap_or("Unknown"));
+            error!(target: "response", "{} [{}] {} {} => {}", Paint::red(ip.inner()), ua, method, Paint::red(uri_path_query.inner()), Paint::red(status.inner()));
+        } else {
+            info!(target: "response", "{} {} {} => {}", ip, method, Paint::blue(uri_path_query), status)
+        }
     }
 }
 

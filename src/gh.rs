@@ -6,12 +6,11 @@ use rocket::{
     http::{ContentType, Status},
     request::{self, FromRequest},
     tokio::fs::write,
-    yansi::Paint,
     Request, Route, State,
 };
 
 use crate::config::Config;
-use crate::util::{self, get_ip};
+use crate::util;
 
 pub fn routes() -> Vec<Route> {
     routes![get_gh]
@@ -29,14 +28,18 @@ async fn get_gh(
     client: &State<reqwest::Client>,
     config: &State<Config>,
     _token: Token,
-) -> (Status, GhResponse) {
-    let file_str = github_path.to_str().unwrap().replace("/", "_");
+) -> (Status, Option<GhResponse>) {
+    let mut file_str = github_path.to_str().unwrap().to_string();
+    if file_str.replace("/", "").len() == 0 {
+        return (Status::NotFound, None);
+    }
+    file_str = file_str.replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
     if filepath.exists() {
         debug!("{} is exists", &file_str);
         return (
             Status::Ok,
-            GhResponse::File(NamedFile::open(&filepath).await.ok()),
+            Some(GhResponse::File(NamedFile::open(&filepath).await.ok())),
         );
     }
     let res = client
@@ -76,7 +79,10 @@ async fn get_gh(
     match content_type_result {
         Ok(content_type) => (
             status_code,
-            GhResponse::Spider(data, ContentType::new(content_type.0, content_type.1)),
+            Some(GhResponse::Spider(
+                data,
+                ContentType::new(content_type.0, content_type.1),
+            )),
         ),
         Err(content_type_string) => {
             warn!(
@@ -85,7 +91,10 @@ async fn get_gh(
             );
             (
                 status_code,
-                GhResponse::Spider(data, ContentType::new(content_type_string, "")),
+                Some(GhResponse::Spider(
+                    data,
+                    ContentType::new(content_type_string, ""),
+                )),
             )
         }
     }
@@ -108,37 +117,21 @@ impl<'r> FromRequest<'r> for Token {
             debug!("Token not set");
             return request::Outcome::Success(Token());
         }
-        let method = Paint::green(request.method());
-        let uri = request.uri();
-        let uri_path = uri.path();
-        let uri_path_str = Paint::red(uri_path.url_decode_lossy());
-        let ua = Paint::yellow(request.headers().get_one("user-agent").unwrap_or("Unknown"));
-        let ip = Paint::red(get_ip(request));
-        let mut query = "".to_string();
-        if let Some(q) = uri.query() {
-            query = format!("?{}", q.as_str());
-        }
-        let query_paint = Paint::red(query);
         match request.query_value::<String>("token") {
             Some(token_result) => match token_result {
                 Ok(query_token) => {
                     if token == &query_token {
                         request::Outcome::Success(Token())
                     } else {
-                        error!(target: "request", "{} {} {} {}{}", ip, ua, method, uri_path_str,query_paint);
                         request::Outcome::Failure((Status::NotFound, TokenError::Invalid))
                     }
                 }
                 Err(e) => {
-                    error!(target: "request", "{} {} {} {}{}", ip, ua, method, uri_path_str,query_paint);
                     error!(target: "token", "{}", e);
                     request::Outcome::Failure((Status::NotFound, TokenError::Invalid))
                 }
             },
-            None => {
-                error!(target: "request", "{} {} {} {}{}", ip, ua, method, uri_path_str,query_paint);
-                request::Outcome::Failure((Status::NotFound, TokenError::Missing))
-            }
+            None => request::Outcome::Failure((Status::NotFound, TokenError::Missing)),
         }
     }
 }
