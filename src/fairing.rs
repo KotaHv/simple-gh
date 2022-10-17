@@ -1,4 +1,4 @@
-use std::io::ErrorKind;
+use std::{io::ErrorKind, time::SystemTime};
 
 use rocket::{
     fairing::{Fairing, Info, Kind},
@@ -9,6 +9,9 @@ use rocket::{
 
 use crate::config::Config;
 use crate::util::get_ip;
+
+#[derive(Copy, Clone)]
+struct TimerStart(Option<SystemTime>);
 
 const LOGGING_ROUTE_BLACKLIST: [&str; 1] = ["/alive"];
 pub struct Logging();
@@ -39,7 +42,7 @@ impl Fairing for Logging {
     }
 
     async fn on_request(&self, request: &mut Request<'_>, _data: &mut Data<'_>) {
-        let method = Paint::green(request.method());
+        request.local_cache(|| TimerStart(Some(SystemTime::now())));
         let uri = request.uri();
         let uri_path = uri.path();
         let uri_path_str = uri_path.url_decode_lossy();
@@ -49,13 +52,14 @@ impl Fairing for Logging {
         {
             return;
         }
+        let method = Paint::green(request.method());
         let ip = Paint::cyan(get_ip(request));
-        match uri.query() {
-            Some(q) => {
-                info!(target: "request", "{} {} {}?{}", ip, method, Paint::blue(uri_path_str), Paint::blue(&q[..q.len().min(30)]))
-            }
-            None => info!(target: "request", "{} {} {}", ip, method, Paint::blue(uri_path_str)),
-        };
+        let mut query = "".to_string();
+        if let Some(q) = uri.query() {
+            query = format!("?{}", q.as_str());
+        }
+        let uri_path_query = Paint::blue(uri_path_str.to_string() + &query);
+        info!(target: "request", "{} {} {}", ip, method, uri_path_query);
     }
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
@@ -75,12 +79,18 @@ impl Fairing for Logging {
             query = format!("?{}", q.as_str());
         }
         let uri_path_query = Paint::blue(uri_path_str.to_string() + &query);
+        let mut duration_str = "".to_string();
+        let start_time = request.local_cache(|| TimerStart(None));
+        if let Some(Ok(duration)) = start_time.0.map(|st| st.elapsed()) {
+            duration_str = format!("{:?}", duration);
+            response.set_raw_header("X-Response-Time", duration_str.clone());
+        }
         let status = Paint::yellow(response.status());
         if status.inner().code >= 400 {
             let ua = Paint::yellow(request.headers().get_one("user-agent").unwrap_or("Unknown"));
-            error!(target: "response", "{} [{}] {} {} => {}", Paint::red(ip.inner()), ua, method, Paint::red(uri_path_query.inner()), Paint::red(status.inner()));
+            error!(target: "response", "{} [{}] {} {} => {} {}", Paint::red(ip.inner()), ua, method, Paint::red(uri_path_query.inner()), Paint::red(status.inner()), duration_str);
         } else {
-            info!(target: "response", "{} {} {} => {}", ip, method, Paint::blue(uri_path_query), status)
+            info!(target: "response", "{} {} {} => {} {}", ip, method, uri_path_query, status, duration_str)
         }
     }
 }
