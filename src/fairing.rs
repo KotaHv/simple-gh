@@ -43,23 +43,6 @@ impl Fairing for Logging {
 
     async fn on_request(&self, request: &mut Request<'_>, _data: &mut Data<'_>) {
         request.local_cache(|| TimerStart(Some(SystemTime::now())));
-        let uri = request.uri();
-        let uri_path = uri.path();
-        let uri_path_str = uri_path.url_decode_lossy();
-        if LOGGING_ROUTE_BLACKLIST
-            .iter()
-            .any(|x| uri_path_str.starts_with(x))
-        {
-            return;
-        }
-        let method = Paint::green(request.method());
-        let ip = Paint::cyan(get_ip(request));
-        let mut query = "".to_string();
-        if let Some(q) = uri.query() {
-            query = format!("?{}", q.as_str());
-        }
-        let uri_path_query = Paint::blue(uri_path_str.to_string() + &query);
-        info!(target: "request", "{} {} {}", ip, method, uri_path_query);
     }
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
