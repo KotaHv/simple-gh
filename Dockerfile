@@ -1,4 +1,28 @@
-FROM rust:1.64.0-alpine3.16 as build
+FROM --platform=$BUILDPLATFORM rust:1.64.0-alpine3.16 as build
+
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+    "amd64") \
+    MUSL="x86_64-linux-musl"; \
+    echo x86_64-unknown-linux-musl > /rust_target.txt \
+    ;; \
+    "arm64") \
+    MUSL="aarch64-linux-musl"; \
+    echo aarch64-unknown-linux-musl > /rust_target.txt \
+    ;; \
+    "arm") \
+    MUSL="arm-linux-musleabihf"; \
+    echo armv7-unknown-linux-musleabihf > /rust_target.txt \
+    ;; \
+    *) \
+    echo "Doesn't support $TARGETARCH architecture" \
+    exit 1 ;; \
+    esac \
+    && echo "$MUSL" \
+    && wget -qO- "https://musl.cc/$MUSL-cross.tgz" | tar -xzC /root/ \
+    && PATH="/root/$MUSL-cross/bin:$PATH" \
+    && CC=/root/$MUSL-cross/bin/$MUSL-gcc \
+    && echo "$CC" > /cc.txt
 
 ENV LANG=C.UTF-8 \
     TZ=UTC \
@@ -16,13 +40,16 @@ WORKDIR /app
 
 COPY ./Cargo.* ./
 
-RUN cargo build --release \
+RUN rustup target add $(cat /rust_target.txt)
+
+RUN RUSTFLAGS="-C linker=$(cat /cc.txt)" CC=$(cat /cc.txt) cargo build --release --target $(cat /rust_target.txt) \
     && find . -not -path "./target*" -delete
 
 COPY . .
 RUN touch src/main.rs
 
-RUN cargo build --release
+RUN RUSTFLAGS="-C linker=$(cat /cc.txt)" CC=$(cat /cc.txt) cargo build --release --target $(cat /rust_target.txt)
+RUN mv target/$(cat /rust_target.txt)/release/simple-gh .
 
 FROM alpine:3.16
 
@@ -37,7 +64,7 @@ VOLUME /cache
 EXPOSE 80
 
 WORKDIR /
-COPY --from=build /app/target/release/simple-gh .
+COPY --from=build /app/simple-gh .
 
 COPY docker/healthcheck.sh /healthcheck.sh
 COPY docker/start.sh /start.sh
