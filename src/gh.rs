@@ -36,7 +36,7 @@ async fn get_gh(
     file_str = file_str.replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
     if filepath.exists() {
-        debug!("{} is exists", &file_str);
+        debug!("{file_str} is exists");
         return (
             Status::Ok,
             Some(GhResponse::File(NamedFile::open(&filepath).await.ok())),
@@ -62,8 +62,7 @@ async fn get_gh(
                 write(&filepath, &data).await.ok();
             } else {
                 warn!(
-                    "{} content-length:{} > {}",
-                    &file_str,
+                    "{file_str} content-length:{} > {}",
                     Byte::from_bytes(content_length)
                         .get_appropriate_unit(true)
                         .to_string(),
@@ -73,7 +72,7 @@ async fn get_gh(
                 );
             }
         } else {
-            warn!("{} content-length is None", &file_str);
+            warn!("{file_str} content-length is None");
         }
     }
     match content_type_result {
@@ -85,10 +84,7 @@ async fn get_gh(
             )),
         ),
         Err(content_type_string) => {
-            warn!(
-                "path={:?}, content-type={}",
-                github_path, content_type_string
-            );
+            warn!("path={github_path:?}, content-type={content_type_string}");
             (
                 status_code,
                 Some(GhResponse::Spider(
@@ -127,7 +123,7 @@ impl<'r> FromRequest<'r> for Token {
                     }
                 }
                 Err(e) => {
-                    error!(target: "token", "{}", e);
+                    error!(target: "token", "{e}");
                     request::Outcome::Failure((Status::NotFound, TokenError::Invalid))
                 }
             },

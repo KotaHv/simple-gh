@@ -65,15 +65,15 @@ impl Fairing for Logging {
         let mut duration_str = "".to_string();
         let start_time = request.local_cache(|| TimerStart(None));
         if let Some(Ok(duration)) = start_time.0.map(|st| st.elapsed()) {
-            duration_str = format!("{:?}", duration);
+            duration_str = format!("{duration:?}");
             response.set_raw_header("X-Response-Time", duration_str.clone());
         }
         let status = Paint::yellow(response.status());
         if status.inner().code >= 400 {
             let ua = Paint::yellow(request.headers().get_one("user-agent").unwrap_or("Unknown"));
-            error!(target: "response", "{} [{}] {} {} => {} {}", Paint::red(ip.inner()), ua, method, Paint::red(uri_path_query.inner()), Paint::red(status.inner()), duration_str);
+            error!(target: "response", "{ip} {method} {uri_path_query} => {status} [{ua}] {duration_str}", ip=Paint::red(ip.inner()), uri_path_query=Paint::red(uri_path_query.inner()), status=Paint::red(status.inner()));
         } else {
-            info!(target: "response", "{} {} {} => {} {}", ip, method, uri_path_query, status, duration_str)
+            info!(target: "response", "{ip} {method} {uri_path_query} => {status} {duration_str}");
         }
     }
 }
@@ -110,10 +110,7 @@ impl Fairing for BackgroundTask {
                                 let duration = chrono::Utc::now() - create_date;
                                 if duration > cache_time {
                                     warn!(target:"BackGroundTask",
-                                        "{:?} cache has expired, {:?} > {:?}",
-                                        entry.file_name(),
-                                        duration,
-                                        cache_time
+                                        "{:?} cache has expired, {duration:?} > {cache_time:?}",entry.file_name()
                                     );
                                     tokio::fs::remove_file(entry.path()).await.ok();
                                     continue;
@@ -125,9 +122,9 @@ impl Fairing for BackgroundTask {
                         }
                         if cache_size > config.max_cache {
                             warn!("Exceed the maximum cache");
-                            debug!("{:?}", files);
+                            debug!("{files:?}");
                             files.sort_by(|a, b| a.1.cmp(&b.1));
-                            debug!("{:?}", files);
+                            debug!("{files:?}");
                             for (file, _, size) in files.iter() {
                                 warn!("delete file {:?}", file.file_name());
                                 tokio::fs::remove_file(file.path()).await.ok();
@@ -139,7 +136,7 @@ impl Fairing for BackgroundTask {
                         }
                     }
                     Err(e) => {
-                        error!("{:?}:{}", e.kind(), e);
+                        error!("{:?}:{e}", e.kind());
                         if e.kind() == ErrorKind::NotFound {
                             error!("mkdir: {:?}", cache_path);
                             tokio::fs::create_dir_all(&cache_path).await.ok();

@@ -16,8 +16,7 @@ pub fn init_config() -> Config {
     let (max_cache, max_cache_str) = Config::max_cache();
     if file_max > max_cache {
         panic!(
-            "SIMPLE_GH_FILE_MAX({}) cannot be greater than SIMPLE_GH_MAX_CACHE({})",
-            file_max_str, max_cache_str
+            "SIMPLE_GH_FILE_MAX({file_max_str}) cannot be greater than SIMPLE_GH_MAX_CACHE({max_cache_str})"
         );
     }
     let cache_time = Config::cache_time();
@@ -36,7 +35,7 @@ impl Config {
         let cache_str = dotenvy::var("SIMPLE_GH_CACHE_DIR").unwrap_or("cache".to_string());
         let cache_path = Path::new(&cache_str);
         if !cache_path.exists() {
-            info!("mkdir: {}", cache_str);
+            info!("mkdir: {cache_str}");
             create_dir_all(cache_path).ok();
         }
         cache_path.to_owned()
