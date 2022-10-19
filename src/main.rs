@@ -44,7 +44,7 @@ fn init_logger() {
             )
         })
         .filter(Some("rocket::launch"), LevelFilter::Warn)
-        .filter(Some("_"), LevelFilter::Warn)
+        .filter(Some("_"), LevelFilter::Error)
         .filter(Some("rocket::shield::shield"), LevelFilter::Warn)
         .filter(Some("rocket::server"), LevelFilter::Warn)
         .filter(Some("reqwest::connect"), LevelFilter::Warn)
