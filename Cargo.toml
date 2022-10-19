@@ -1,0 +1,28 @@
+[package]
+name = "simple-gh"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+warp = { version = "0.3", default-features = false }
+reqwest = { version = "0.11.12", default-features = false, features = ["rustls-tls"] }
+chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
+log = "0.4"
+pretty_env_logger = "0.4"
+yansi = "0.5.1"
+bytes = "1"
+byte-unit = { version = "4.0.14", default-features = false }
+dotenvy = "0.15.5"
+mime = "0.3"
+mime_guess = "2.0.0"
+serde = { version = "1.0", features = ["derive"] }
+
+[profile.release]
+lto = true
+opt-level = 3
+strip = true  # Automatically strip symbols from the binary.
+codegen-units = 1
+panic = "abort"
