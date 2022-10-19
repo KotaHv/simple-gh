@@ -2,10 +2,9 @@ use std::path::PathBuf;
 
 use byte_unit::Byte;
 use rocket::{
-    fs::NamedFile,
     http::{ContentType, Status},
     request::{self, FromRequest},
-    tokio::fs::write,
+    tokio::fs::{self, write},
     Request, Route, State,
 };
 
@@ -18,8 +17,8 @@ pub fn routes() -> Vec<Route> {
 
 #[derive(Responder)]
 enum GhResponse {
-    File(Option<NamedFile>),
-    Spider(Vec<u8>, ContentType),
+    Status(Status),
+    Response((Status, (ContentType, Vec<u8>))),
 }
 
 #[get("/<github_path..>")]
@@ -28,70 +27,72 @@ async fn get_gh(
     client: &State<reqwest::Client>,
     config: &State<Config>,
     _token: Token,
-) -> (Status, Option<GhResponse>) {
+) -> GhResponse {
     let mut file_str = github_path.to_str().unwrap().to_string();
     if file_str.replace("/", "").len() == 0 {
-        return (Status::NotFound, None);
+        return GhResponse::Status(Status::NotFound);
     }
     file_str = file_str.replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
     if filepath.exists() {
         debug!("{file_str} is exists");
-        return (
-            Status::Ok,
-            Some(GhResponse::File(NamedFile::open(&filepath).await.ok())),
-        );
+        match fs::read(&filepath).await {
+            Ok(content) => {
+                let content_type;
+                match filepath.extension() {
+                    Some(ext) => {
+                        content_type = ContentType::from_extension(&ext.to_string_lossy())
+                            .unwrap_or(ContentType::Bytes)
+                    }
+                    None => content_type = ContentType::Bytes,
+                };
+                return GhResponse::Response((Status::Ok, (content_type, content)));
+            }
+            Err(e) => {
+                error!("{file_str}: {e}");
+            }
+        }
     }
-    let res = client
+
+    match client
         .get(format!(
             "https://raw.githubusercontent.com/{}",
-            github_path.to_str().unwrap()
+            github_path.to_string_lossy()
         ))
         .send()
         .await
-        .unwrap();
-    let is_success = res.status().is_success();
-    let status_code = Status::new(res.status().as_u16());
-    let content_type_result = util::content_type(&res);
-    let content_length_option = res.content_length();
-    let content: bytes::Bytes = res.bytes().await.unwrap();
-    let data: Vec<u8> = content.to_vec();
-    if is_success {
-        if let Some(content_length) = content_length_option {
-            if content_length <= config.file_max {
-                write(&filepath, &data).await.ok();
-            } else {
-                warn!(
-                    "{file_str} content-length:{} > {}",
-                    Byte::from_bytes(content_length)
-                        .get_appropriate_unit(true)
-                        .to_string(),
-                    Byte::from_bytes(config.file_max)
-                        .get_appropriate_unit(true)
-                        .to_string()
-                );
+    {
+        Ok(res) => {
+            let is_success = res.status().is_success();
+            let status_code = Status::new(res.status().as_u16());
+            let content_type = util::content_type(&res);
+            let content_length_option = res.content_length();
+            let content: bytes::Bytes = res.bytes().await.unwrap();
+            let data: Vec<u8> = content.to_vec();
+            if is_success {
+                if let Some(content_length) = content_length_option {
+                    if content_length <= config.file_max {
+                        write(&filepath, &data).await.ok();
+                    } else {
+                        warn!(
+                            "{file_str} content-length:{} > {}",
+                            Byte::from_bytes(content_length)
+                                .get_appropriate_unit(true)
+                                .to_string(),
+                            Byte::from_bytes(config.file_max)
+                                .get_appropriate_unit(true)
+                                .to_string()
+                        );
+                    }
+                } else {
+                    warn!("{file_str} content-length is None");
+                }
             }
-        } else {
-            warn!("{file_str} content-length is None");
+            GhResponse::Response((status_code, (content_type, data)))
         }
-    }
-    match content_type_result {
-        Ok(content_type) => (
-            status_code,
-            Some(GhResponse::Spider(
-                data,
-                ContentType::new(content_type.0, content_type.1),
-            )),
-        ),
-        Err(content_type_string) => {
-            warn!("path={github_path:?}, content-type={content_type_string}");
-            (
-                status_code,
-                Some(GhResponse::Spider(
-                    data,
-                    ContentType::new(content_type_string, ""),
-                )),
-            )
+        Err(e) => {
+            error!("{github_path:?}: {e}");
+            GhResponse::Status(Status::InternalServerError)
         }
     }
 }
