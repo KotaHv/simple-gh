@@ -3,7 +3,7 @@ use std::{io::ErrorKind, time::SystemTime};
 use rocket::{
     fairing::{Fairing, Info, Kind},
     tokio::{self, fs::DirEntry},
-    yansi::Paint,
+    yansi::{Color, Paint},
     Data, Orbit, Request, Response, Rocket,
 };
 
@@ -71,7 +71,7 @@ impl Fairing for Logging {
         let status = Paint::yellow(response.status());
         if status.inner().code >= 400 {
             let ua = Paint::yellow(request.headers().get_one("user-agent").unwrap_or("Unknown"));
-            error!(target: "response", "{ip} {method} {uri_path_query} => {status} [{ua}] {duration_str}", ip=Paint::red(ip.inner()), uri_path_query=Paint::red(uri_path_query.inner()), status=Paint::red(status.inner()));
+            error!(target: "response", "{ip} {method} {uri_path_query} => {status} [{ua}] {duration_str}", ip=ip.fg(Color::Red).bold(), uri_path_query=uri_path_query.fg(Color::Red).underline(), status=status.fg(Color::Red).dimmed());
         } else {
             info!(target: "response", "{ip} {method} {uri_path_query} => {status} {duration_str}");
         }
