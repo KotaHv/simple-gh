@@ -32,27 +32,21 @@ class BackgroundTask:
 
     @logger.catch
     async def _check(self):
-        for file in await util.get_dir_files(self.cache_dir):
-            stat = await file.stat()
-            if stat.st_size > self.file_size:
-                logger.info(
-                    f"{file} has been deleted; reason: {stat.st_size} > {self.file_size}"
-                )
-                await util.rm_file(file)
         for file in await util.get_dir_files(self.cache_dir,
                                              sort=util.FileSort.CTIME):
             if time.time() - (await file.stat()).st_ctime <= self.cache_time:
                 break
-            logger.info(f"{file} cache has expired")
             await util.rm_file(file)
-            logger.info(f"{file} has been deleted")
+            logger.info(f"{file} has been deleted; reason: cache has expired")
         cache_size = await util.get_dir_size(self.cache_dir)
         if cache_size > self.max_cache:
             for file in await util.get_dir_files(self.cache_dir,
                                                  sort=util.FileSort.CTIME):
                 cache_size -= await (file.stat()).st_size
                 await util.rm_file(file)
-                logger.info(f"{file} has been deleted")
+                logger.info(
+                    f"{file} has been deleted; reason: {cache_size} > {self.max_cache}"
+                )
                 if cache_size <= self.max_cache:
                     break
 

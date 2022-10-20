@@ -1,6 +1,6 @@
 import httpx
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response
 from anyio import Path
 
 from ..config import settings
@@ -23,8 +23,15 @@ def path_guard(github_path: str):
     return github_path
 
 
+async def write_file(filepath: Path, content: bytes, typepath: Path,
+                     headers: dict):
+    await typepath.write_text(headers["content-type"], encoding="utf-8")
+    await filepath.write_bytes(content)
+
+
 @router.get("/{github_path:path}", dependencies=[Depends(token_guard)])
-async def get_gh(github_path: str = Depends(path_guard)):
+async def get_gh(background_tasks: BackgroundTasks,
+                 github_path: str = Depends(path_guard)):
 
     filepath = cache_dir / github_path.replace("/", "_")
     typepath = filepath.with_suffix(filepath.suffix + ".type")
@@ -33,23 +40,11 @@ async def get_gh(github_path: str = Depends(path_guard)):
     if await filepath.exists():
         headers['content-type'] = await typepath.read_text("utf-8")
         return FileResponse(filepath, headers=headers)
-
-    req = client.build_request("GET", github_path)
-    r = await client.send(req, stream=True)
+    r = await client.get(github_path)
+    content = r.content
     headers['content-type'] = r.headers.get("content-type",
                                             "application/octet-stream")
-
-    async def write_file():
-        await typepath.write_text(headers["content-type"], encoding="utf-8")
-        async with await filepath.open("wb") as f:
-            async for chunk in r.aiter_bytes():
-                await f.write(chunk)
-                yield chunk
-
-    stream_fn = r.aiter_bytes
-    if r.is_success:
-        stream_fn = write_file
-    return StreamingResponse(stream_fn(),
-                             headers=headers,
-                             status_code=r.status_code,
-                             background=BackgroundTasks([r.aclose]))
+    if r.is_success and len(content) <= settings.file_max:
+        background_tasks.add_task(write_file, filepath, content, typepath,
+                                  headers)
+    return Response(content=content, status_code=r.status_code, headers=headers)
