@@ -18,8 +18,14 @@ COPY --from=install /usr/local/lib/python3.10/site-packages /usr/lib/python3.10/
 
 WORKDIR /opt/simple-gh
 
+RUN mkdir /opt/simple-gh/data
+
+VOLUME /opt/simple-gh/data
+
 COPY . .
 
+COPY docker/healthcheck.sh /healthcheck.sh
+COPY docker/start.sh /start.sh
 
 EXPOSE 80
 
