@@ -51,7 +51,4 @@ class BackgroundTask:
                     break
 
     async def stop(self):
-        if self.task.done():
-            self.task.result()
-        else:
-            self.task.cancel()
+        self.task.cancel()
