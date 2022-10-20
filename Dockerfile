@@ -20,9 +20,9 @@ WORKDIR /opt/simple-gh
 
 COPY . .
 
-ENTRYPOINT ["python3", "-m", "uvicorn", "main:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "80", "--no-access-log"]
 
 EXPOSE 80
 
-HEALTHCHECK --interval=5s --timeout=3s --start-period=30s \
-    CMD curl --insecure --fail --silent --show-error http://localhost/healthcheck || exit 1
+HEALTHCHECK --interval=60s --timeout=10s CMD ["/healthcheck.sh"]
+
+CMD [ "/start.sh" ]

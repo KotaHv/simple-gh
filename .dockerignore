@@ -4,3 +4,6 @@ README.md
 poetry.lock
 pyproject.toml
 data
+.env
+cache
+target
