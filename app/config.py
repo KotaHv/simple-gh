@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     class Config:
         env_prefix = "simple_gh_"  # defaults to no prefix
+        env_file = '.env'
+        env_file_encoding = 'utf-8'
 
 
 settings = Settings()
