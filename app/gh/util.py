@@ -18,12 +18,12 @@ class FileSort(Enum):
     SIZE = auto()
 
 
-async def get_dir_files(dirpath: Path,
-                        sort: FileSort | None = None) -> list[Path]:
+async def get_dir_files(dirpath: Path, sort: FileSort | None = None) -> list[Path]:
     if sort is None:
         return [
-            file async for file in dirpath.iterdir() if
-            file.suffix != ".type" and await file.is_file()
+            file
+            async for file in dirpath.iterdir()
+            if file.suffix != ".type" and await file.is_file()
         ]
     files = []
     async for file in dirpath.iterdir():
@@ -37,8 +37,8 @@ async def get_dir_files(dirpath: Path,
 
 
 async def rm_file(file: Path):
-    await file.unlink()
     try:
+        await file.unlink()
         await file.with_suffix(file.suffix + ".type").unlink()
     except FileNotFoundError:
         pass
