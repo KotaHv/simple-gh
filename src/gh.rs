@@ -37,7 +37,7 @@ fn gh_route(
     }
     route
         .and(warp::get())
-        .and(warp::path::tail())
+        .and(path_guard())
         .and(with_client(client))
         .and_then(get_gh)
 }
@@ -58,6 +58,16 @@ fn token_guard(
         })
 }
 
+fn path_guard() -> impl Filter<Extract = (String,), Error = Rejection> + Clone {
+    warp::path::tail().and_then(|tail: Tail| async move {
+        let gh_path = tail.as_str();
+        if gh_path.replace("/", "").len() == 0 {
+            return Err(reject::not_found());
+        }
+        Ok(gh_path.to_string())
+    })
+}
+
 fn with_client(client: Client) -> impl Filter<Extract = (Client,), Error = Infallible> + Clone {
     warp::any().map(move || client.clone())
 }
@@ -68,11 +78,11 @@ fn with_config(
     warp::any().map(move || config.clone())
 }
 
-async fn get_gh(config: Arc<Config>, tail: Tail, client: Client) -> Result<impl Reply, Rejection> {
-    let gh_path = tail.as_str();
-    if gh_path.replace("/", "").len() == 0 {
-        return Err(reject::not_found());
-    }
+async fn get_gh(
+    config: Arc<Config>,
+    gh_path: String,
+    client: Client,
+) -> Result<impl Reply, Rejection> {
     let file_str = gh_path.replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
     if filepath.exists() {
