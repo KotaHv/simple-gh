@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse, Response
 from anyio import Path
 
@@ -30,8 +30,7 @@ async def write_file(filepath: Path, content: bytes, typepath: Path,
 
 
 @router.get("/{github_path:path}", dependencies=[Depends(token_guard)])
-async def get_gh(background_tasks: BackgroundTasks,
-                 github_path: str = Depends(path_guard)):
+async def get_gh(github_path: str = Depends(path_guard)):
 
     filepath = cache_dir / github_path.replace("/", "_")
     typepath = filepath.with_suffix(filepath.suffix + ".type")
@@ -45,6 +44,5 @@ async def get_gh(background_tasks: BackgroundTasks,
     headers['content-type'] = r.headers.get("content-type",
                                             "application/octet-stream")
     if r.is_success and len(content) <= settings.file_max:
-        background_tasks.add_task(write_file, filepath, content, typepath,
-                                  headers)
+        await write_file(filepath, content, typepath, headers)
     return Response(content=content, status_code=r.status_code, headers=headers)
