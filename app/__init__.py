@@ -24,7 +24,7 @@ def create_app():
 
     @app.get("/alive")
     async def alive():
-        return {"msg": datetime.now()}
+        return datetime.now()
 
     return app
 
