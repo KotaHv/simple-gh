@@ -1,9 +1,8 @@
 __pycache__
 logs
 README.md
-poetry.lock
-pyproject.toml
 data
 .env
 cache
 target
+.vscode
