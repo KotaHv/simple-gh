@@ -1,31 +1,32 @@
-FROM alpine:3.16 AS base
+FROM python:3.10 as requirements-stage
 
-RUN apk add --no-cache --update python3 tzdata curl
+WORKDIR /tmp
 
-FROM python:3.10 AS install
+RUN pip install poetry
 
-COPY requirements.txt .
+COPY ./pyproject.toml ./poetry.lock* /tmp/
 
-RUN pip install -r requirements.txt --no-binary pydantic
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
 
-RUN rm -rf /usr/local/lib/python3.10/site-packages/pip*
+FROM python:3.10-slim
 
-RUN rm -rf /usr/local/lib/python3.10/site-packages/setuptools*
+WORKDIR /app
 
-FROM base
+COPY --from=requirements-stage /tmp/requirements.txt .
 
-COPY --from=install /usr/local/lib/python3.10/site-packages /usr/lib/python3.10/site-packages
-
-WORKDIR /opt/simple-gh
-
-RUN mkdir /opt/simple-gh/data
-
-VOLUME /opt/simple-gh/data
+RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 
 COPY . .
 
+COPY docker/gunicorn_conf.py /gunicorn_conf.py
 COPY docker/healthcheck.sh /healthcheck.sh
 COPY docker/start.sh /start.sh
+COPY docker/start-reload.sh /start-reload.sh
+
+RUN mkdir /app/data
+VOLUME /app/data
+
+ENV PYTHONPATH=/app
 
 EXPOSE 80
 
