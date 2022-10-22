@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chrono::prelude::Local;
+use chrono::Local;
 use dotenvy::dotenv;
 use warp::{
     log::{Info, Log},
@@ -71,9 +71,9 @@ async fn main() {
         .parse_write_style(&config.log.style)
         .init();
     let log = log_custom("simple-gh");
+    task::backgroud_task(config.clone()).await;
     let client = reqwest::Client::new();
     let gh = gh::routes(client.clone(), config.clone()).with(log);
     let routes = alive().or(warp::path("gh").and(gh));
-    task::backgroud_task(config.clone());
     warp::serve(routes).run(config.addr).await;
 }
