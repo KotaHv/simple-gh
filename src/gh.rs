@@ -101,54 +101,53 @@ async fn get_gh(
             }
         }
     }
-    match client
+    let res = match client
         .get(format!("https://raw.githubusercontent.com/{gh_path}"))
         .send()
         .await
     {
-        Ok(res) => {
-            let is_success = res.status().is_success();
-            let status_code = StatusCode::from_u16(res.status().as_u16()).unwrap();
-            let content_type = res
-                .headers()
-                .get(reqwest::header::CONTENT_TYPE)
-                .unwrap()
-                .to_owned();
-            let content_length_option = res.content_length();
-            let content = res.bytes().await.unwrap();
-            // let data = content.;
-            let data: Vec<u8> = content.to_vec();
-            if is_success {
-                if let Some(content_length) = content_length_option {
-                    if content_length <= config.file_max {
-                        fs::write(&filepath, &data).await.ok();
-                        fs::write(&typepath, &content_type).await.ok();
-                    } else {
-                        warn!(
-                            "{gh_path} content-length:{} > {}",
-                            Byte::from_bytes(content_length)
-                                .get_appropriate_unit(true)
-                                .to_string(),
-                            Byte::from_bytes(config.file_max)
-                                .get_appropriate_unit(true)
-                                .to_string()
-                        );
-                    }
-                } else {
-                    warn!("{gh_path} content-length is None");
-                }
-            }
-            let response = Response::builder()
-                .header("content-type", content_type)
-                .status(status_code)
-                .body(data);
-            Ok(response.into_response())
-        }
+        Ok(res) => res,
         Err(e) => {
             error!("{gh_path}: {e:?}");
-            Err(reject::custom(InternalServerError))
+            return Err(reject::custom(InternalServerError));
+        }
+    };
+    let is_success = res.status().is_success();
+    let status_code = StatusCode::from_u16(res.status().as_u16()).unwrap();
+    let content_type = res
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .unwrap()
+        .to_owned();
+    let content_length_option = res.content_length();
+    let content = res.bytes().await.unwrap();
+    // let data = content.;
+    let data: Vec<u8> = content.to_vec();
+    if is_success {
+        if let Some(content_length) = content_length_option {
+            if content_length <= config.file_max {
+                fs::write(&filepath, &data).await.ok();
+                fs::write(&typepath, &content_type).await.ok();
+            } else {
+                warn!(
+                    "{gh_path} content-length:{} > {}",
+                    Byte::from_bytes(content_length)
+                        .get_appropriate_unit(true)
+                        .to_string(),
+                    Byte::from_bytes(config.file_max)
+                        .get_appropriate_unit(true)
+                        .to_string()
+                );
+            }
+        } else {
+            warn!("{gh_path} content-length is None");
         }
     }
+    let response = Response::builder()
+        .header("content-type", content_type)
+        .status(status_code)
+        .body(data);
+    Ok(response.into_response())
 }
 
 #[derive(Debug)]
