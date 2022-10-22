@@ -19,6 +19,7 @@ dotenvy = "0.15.5"
 mime = "0.3"
 mime_guess = "2.0.0"
 serde = { version = "1.0", features = ["derive"] }
+job_scheduler_ng = "*"
 
 [profile.release]
 lto = true
