@@ -1,7 +1,6 @@
 use std::{convert::Infallible, sync::Arc};
 
 use byte_unit::Byte;
-use mime_guess;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -12,6 +11,7 @@ use warp::{
 };
 
 use crate::config::Config;
+use crate::util;
 
 #[derive(Deserialize, Serialize)]
 struct GhQuery {
@@ -85,13 +85,13 @@ async fn get_gh(
 ) -> Result<impl Reply, Rejection> {
     let file_str = gh_path.replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
+    let typepath = util::typepath(&filepath);
+    info!("{filepath:?}\n{typepath:?}");
     if filepath.exists() {
         debug!("{file_str} is exists");
         match fs::read(&filepath).await {
             Ok(content) => {
-                let content_type = mime_guess::from_path(filepath)
-                    .first_or_octet_stream()
-                    .to_string();
+                let content_type = util::content_type_typepath(&typepath).await;
                 return Ok(Response::builder()
                     .header("content-type", content_type)
                     .body(content)
@@ -123,6 +123,7 @@ async fn get_gh(
                 if let Some(content_length) = content_length_option {
                     if content_length <= config.file_max {
                         fs::write(&filepath, &data).await.ok();
+                        fs::write(&typepath, &content_type).await.ok();
                     } else {
                         warn!(
                             "{gh_path} content-length:{} > {}",

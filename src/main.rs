@@ -14,6 +14,7 @@ extern crate log;
 mod config;
 mod gh;
 mod task;
+mod util;
 
 fn alive() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("alive")
