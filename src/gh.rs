@@ -34,18 +34,12 @@ async fn get_gh(
     }
     file_str = file_str.replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
+    let typepath = util::typepath(&filepath);
     if filepath.exists() {
         debug!("{file_str} is exists");
         match fs::read(&filepath).await {
             Ok(content) => {
-                let content_type;
-                match filepath.extension() {
-                    Some(ext) => {
-                        content_type = ContentType::from_extension(&ext.to_string_lossy())
-                            .unwrap_or(ContentType::Bytes)
-                    }
-                    None => content_type = ContentType::Bytes,
-                };
+                let content_type = util::content_type_typepath(&typepath).await;
                 return GhResponse::Response((Status::Ok, (content_type, content)));
             }
             Err(e) => {
@@ -65,7 +59,7 @@ async fn get_gh(
         Ok(res) => {
             let is_success = res.status().is_success();
             let status_code = Status::new(res.status().as_u16());
-            let content_type = util::content_type(&res);
+            let content_type = util::content_type_reqwest(&res);
             let content_length_option = res.content_length();
             let content: bytes::Bytes = res.bytes().await.unwrap();
             let data: Vec<u8> = content.to_vec();
@@ -73,6 +67,7 @@ async fn get_gh(
                 if let Some(content_length) = content_length_option {
                     if content_length <= config.file_max {
                         write(&filepath, &data).await.ok();
+                        write(&typepath, &content_type.to_string()).await.ok();
                     } else {
                         warn!(
                             "{file_str} content-length:{} > {}",
