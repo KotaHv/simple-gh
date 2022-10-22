@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use config::init_config;
 use dotenvy::dotenv;
 use log::LevelFilter;
 
@@ -11,7 +12,26 @@ extern crate log;
 mod config;
 mod fairing;
 mod gh;
+mod task;
 mod util;
+
+#[rocket::main]
+async fn main() {
+    launch_info();
+    dotenv().ok();
+    init_logger();
+    let config = init_config();
+    task::backgroud_task(config.clone()).await;
+    let _ = rocket::build()
+        .mount("/", routes![alive])
+        .mount("/gh", gh::routes())
+        .manage(create_client())
+        .manage(config)
+        .attach(fairing::Logging())
+        .launch()
+        .await;
+    warn!("simple-gh process exited!");
+}
 
 fn create_client() -> reqwest::Client {
     reqwest::Client::new()
@@ -19,7 +39,7 @@ fn create_client() -> reqwest::Client {
 
 #[get("/alive")]
 fn alive() -> String {
-    chrono::prelude::Local::now().to_string()
+    chrono::Local::now().to_string()
 }
 
 fn launch_info() {
@@ -49,18 +69,4 @@ fn init_logger() {
         .filter(Some("rocket::server"), LevelFilter::Warn)
         .filter(Some("reqwest::connect"), LevelFilter::Warn)
         .init();
-}
-
-#[launch]
-fn rocket() -> _ {
-    launch_info();
-    dotenv().ok();
-    init_logger();
-    rocket::build()
-        .mount("/", routes![alive])
-        .mount("/gh", gh::routes())
-        .manage(create_client())
-        .manage(config::init_config())
-        .attach(fairing::Logging())
-        .attach(fairing::BackgroundTask())
 }
