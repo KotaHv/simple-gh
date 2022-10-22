@@ -21,7 +21,7 @@ async fn main() {
     launch_info();
     dotenv().ok();
     let config = Arc::new(config::init_config());
-    pretty_env_logger::formatted_builder()
+    pretty_env_logger::formatted_timed_builder()
         .parse_filters(&config.log.level)
         .parse_write_style(&config.log.style)
         .init();
