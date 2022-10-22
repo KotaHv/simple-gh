@@ -48,7 +48,7 @@ async fn get_gh(
         }
     }
 
-    match client
+    let res = match client
         .get(format!(
             "https://raw.githubusercontent.com/{}",
             github_path.to_string_lossy()
@@ -56,40 +56,40 @@ async fn get_gh(
         .send()
         .await
     {
-        Ok(res) => {
-            let is_success = res.status().is_success();
-            let status_code = Status::new(res.status().as_u16());
-            let content_type = util::content_type_reqwest(&res);
-            let content_length_option = res.content_length();
-            let content: bytes::Bytes = res.bytes().await.unwrap();
-            let data: Vec<u8> = content.to_vec();
-            if is_success {
-                if let Some(content_length) = content_length_option {
-                    if content_length <= config.file_max {
-                        write(&filepath, &data).await.ok();
-                        write(&typepath, &content_type.to_string()).await.ok();
-                    } else {
-                        warn!(
-                            "{file_str} content-length:{} > {}",
-                            Byte::from_bytes(content_length)
-                                .get_appropriate_unit(true)
-                                .to_string(),
-                            Byte::from_bytes(config.file_max)
-                                .get_appropriate_unit(true)
-                                .to_string()
-                        );
-                    }
-                } else {
-                    warn!("{file_str} content-length is None");
-                }
-            }
-            GhResponse::Response((status_code, (content_type, data)))
-        }
+        Ok(res) => res,
         Err(e) => {
             error!("{github_path:?}: {e}");
-            GhResponse::Status(Status::InternalServerError)
+            return GhResponse::Status(Status::InternalServerError);
+        }
+    };
+
+    let is_success = res.status().is_success();
+    let status_code = Status::new(res.status().as_u16());
+    let content_type = util::content_type_reqwest(&res);
+    let content_length_option = res.content_length();
+    let content: bytes::Bytes = res.bytes().await.unwrap();
+    let data: Vec<u8> = content.to_vec();
+    if is_success {
+        if let Some(content_length) = content_length_option {
+            if content_length <= config.file_max {
+                write(&filepath, &data).await.ok();
+                write(&typepath, &content_type.to_string()).await.ok();
+            } else {
+                warn!(
+                    "{file_str} content-length:{} > {}",
+                    Byte::from_bytes(content_length)
+                        .get_appropriate_unit(true)
+                        .to_string(),
+                    Byte::from_bytes(config.file_max)
+                        .get_appropriate_unit(true)
+                        .to_string()
+                );
+            }
+        } else {
+            warn!("{file_str} content-length is None");
         }
     }
+    GhResponse::Response((status_code, (content_type, data)))
 }
 
 struct Token();
@@ -109,21 +109,19 @@ impl<'r> FromRequest<'r> for Token {
             debug!("Token not set");
             return request::Outcome::Success(Token());
         }
-        match request.query_value::<String>("token") {
-            Some(token_result) => match token_result {
+        if let Some(token_result) = request.query_value::<String>("token") {
+            match token_result {
                 Ok(query_token) => {
                     if token == &query_token {
-                        request::Outcome::Success(Token())
-                    } else {
-                        request::Outcome::Failure((Status::NotFound, TokenError::Invalid))
+                        return request::Outcome::Success(Token());
                     }
                 }
                 Err(e) => {
                     error!(target: "token", "{e}");
-                    request::Outcome::Failure((Status::NotFound, TokenError::Invalid))
                 }
-            },
-            None => request::Outcome::Failure((Status::NotFound, TokenError::Missing)),
+            }
+            return request::Outcome::Failure((Status::NotFound, TokenError::Invalid));
         }
+        request::Outcome::Failure((Status::NotFound, TokenError::Missing))
     }
 }

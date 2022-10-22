@@ -62,12 +62,14 @@ impl Fairing for Logging {
             query = format!("?{}", q.as_str());
         }
         let uri_path_query = Paint::blue(uri_path_str.to_string() + &query);
-        let mut duration_str = "".to_string();
         let start_time = request.local_cache(|| TimerStart(None));
-        if let Some(Ok(duration)) = start_time.0.map(|st| st.elapsed()) {
-            duration_str = format!("{duration:?}");
-            response.set_raw_header("X-Response-Time", duration_str.clone());
-        }
+        let duration_str = if let Some(Ok(duration)) = start_time.0.map(|st| st.elapsed()) {
+            let d_str = format!("{duration:?}");
+            response.set_raw_header("X-Response-Time", d_str.clone());
+            d_str
+        } else {
+            "".to_string()
+        };
         let status = Paint::yellow(response.status());
         if status.inner().code >= 400 {
             let ua = Paint::yellow(request.headers().get_one("user-agent").unwrap_or("Unknown"));
