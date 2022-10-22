@@ -16,7 +16,7 @@ mod task;
 mod util;
 
 #[rocket::main]
-async fn main() {
+async fn main() -> Result<(), rocket::Error> {
     launch_info();
     dotenv().ok();
     init_logger();
@@ -31,6 +31,7 @@ async fn main() {
         .launch()
         .await;
     warn!("simple-gh process exited!");
+    Ok(())
 }
 
 fn create_client() -> reqwest::Client {
