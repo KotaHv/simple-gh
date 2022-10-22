@@ -1,9 +1,10 @@
-use std::path::PathBuf;
-
 use byte_unit::Byte;
 use rocket::{
-    http::{ContentType, Status},
-    request::{self, FromRequest},
+    http::{
+        uri::{error::PathError as RPathError, fmt::Path, Segments},
+        ContentType, Status,
+    },
+    request::{self, FromRequest, FromSegments},
     tokio::fs::{self, write},
     Request, Route, State,
 };
@@ -23,16 +24,13 @@ enum GhResponse {
 
 #[get("/<github_path..>")]
 async fn get_gh(
-    github_path: PathBuf,
+    github_path: PathGuard,
     client: &State<reqwest::Client>,
     config: &State<Config>,
     _token: Token,
 ) -> GhResponse {
-    let mut file_str = github_path.to_str().unwrap().to_string();
-    if file_str.replace("/", "").len() == 0 {
-        return GhResponse::Status(Status::NotFound);
-    }
-    file_str = file_str.replace("/", "_");
+    let github_path = github_path.0;
+    let file_str = github_path.clone().replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
     let typepath = util::typepath(&filepath);
     if filepath.exists() {
@@ -49,16 +47,13 @@ async fn get_gh(
     }
 
     let res = match client
-        .get(format!(
-            "https://raw.githubusercontent.com/{}",
-            github_path.to_string_lossy()
-        ))
+        .get(format!("https://raw.githubusercontent.com/{}", github_path))
         .send()
         .await
     {
         Ok(res) => res,
         Err(e) => {
-            error!("{github_path:?}: {e}");
+            error!("{github_path}: {e}");
             return GhResponse::Status(Status::InternalServerError);
         }
     };
@@ -90,6 +85,27 @@ async fn get_gh(
         }
     }
     GhResponse::Response((status_code, (content_type, data)))
+}
+
+struct PathGuard(String);
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+enum PathError {
+    BadLen,
+    Other(RPathError),
+}
+
+impl<'r> FromSegments<'r> for PathGuard {
+    type Error = PathError;
+    fn from_segments(segments: Segments<'r, Path>) -> Result<Self, Self::Error> {
+        if segments.len() == 0 {
+            return Err(PathError::BadLen);
+        }
+        match segments.to_path_buf(false) {
+            Ok(path) => Ok(PathGuard(path.to_string_lossy().to_string())),
+            Err(e) => Err(PathError::Other(e)),
+        }
+    }
 }
 
 struct Token();
