@@ -86,7 +86,6 @@ async fn get_gh(
     let file_str = gh_path.replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
     let typepath = util::typepath(&filepath);
-    info!("{filepath:?}\n{typepath:?}");
     if filepath.exists() {
         debug!("{file_str} is exists");
         match fs::read(&filepath).await {
