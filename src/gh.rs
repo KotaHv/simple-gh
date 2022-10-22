@@ -114,11 +114,12 @@ async fn get_gh(
     };
     let is_success = res.status().is_success();
     let status_code = StatusCode::from_u16(res.status().as_u16()).unwrap();
-    let content_type = res
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .unwrap()
-        .to_owned();
+    let mut content_type = "application/octet-stream".to_string();
+    if let Some(ct) = res.headers().get(reqwest::header::CONTENT_TYPE) {
+        if let Ok(ct) = ct.to_str() {
+            content_type = ct.to_string();
+        }
+    }
     let content_length_option = res.content_length();
     let content = res.bytes().await.unwrap();
     // let data = content.;
