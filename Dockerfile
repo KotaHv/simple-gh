@@ -68,6 +68,6 @@ COPY --from=build /app/simple-gh .
 COPY docker/healthcheck.sh /healthcheck.sh
 COPY docker/start.sh /start.sh
 
-HEALTHCHECK --interval=60s --timeout=10s CMD ["/healthcheck.sh"]
+HEALTHCHECK --interval=10s --timeout=5s CMD ["/healthcheck.sh"]
 
 CMD [ "/start.sh" ]
