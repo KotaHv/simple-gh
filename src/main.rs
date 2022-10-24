@@ -27,7 +27,7 @@ async fn main() {
         .parse_write_style(&config.log.style)
         .init();
     let log = log_custom("simple-gh");
-    let task_jh = task::backgroud_task(config.clone()).await;
+    let task_jh = task::background_task(config.clone()).await;
     let client = reqwest::Client::new();
     let gh_routes = gh::routes(client.clone(), config.clone()).with(log);
     let routes = alive_routes(Arc::new(task_jh)).or(warp::path("gh").and(gh_routes));
