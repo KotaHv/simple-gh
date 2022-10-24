@@ -1,7 +1,8 @@
 use std::{ffi::OsStr, fs::Metadata, path::PathBuf, str, str::FromStr};
 
 use chrono::{DateTime, Utc};
-use rocket::{http::ContentType, tokio, Request};
+use log::Level;
+use rocket::{http::ContentType, tokio, yansi::Paint, Request};
 
 pub fn content_type(ct: &str) -> ContentType {
     ContentType::from_str(ct).unwrap_or(ContentType::Bytes)
@@ -56,4 +57,18 @@ pub async fn remove_file(filepath: &PathBuf) {
 
 pub fn create_date(metadata: &Metadata) -> DateTime<Utc> {
     DateTime::from(metadata.created().unwrap_or(metadata.modified().unwrap()))
+}
+
+pub fn colored_level(level: Level) -> Paint<Level> {
+    match level {
+        Level::Trace => Paint::magenta(level),
+        Level::Debug => Paint::blue(level),
+        Level::Info => Paint::green(level),
+        Level::Warn => Paint::yellow(level),
+        Level::Error => Paint::red(level),
+    }
+}
+
+pub fn bold_target<'a>(target: &'a str) -> Paint<&'a str> {
+    Paint::new(target).bold()
 }

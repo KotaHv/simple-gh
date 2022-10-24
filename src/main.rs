@@ -16,6 +16,8 @@ mod gh;
 mod task;
 mod util;
 
+use util::{bold_target, colored_level};
+
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
     launch_info();
@@ -66,8 +68,8 @@ fn init_logger() {
                 buf,
                 "[{}][{}][{}]: {}",
                 chrono::Local::now().format("%Y-%m-%d %H:%M:%S.%3f"),
-                record.target(),
-                record.level(),
+                bold_target(record.target()),
+                colored_level(record.level()),
                 record.args()
             )
         })
