@@ -8,7 +8,7 @@ use tokio::fs::{create_dir_all, read_dir, DirEntry};
 use crate::config::Config;
 use crate::util;
 
-pub async fn backgroud_task(config: Arc<Config>) {
+pub async fn backgroud_task(config: Arc<Config>) -> thread::JoinHandle<()> {
     info!(target:"BackgroundTask","Starting Backgroud Task");
     let cache_time = chrono::Duration::seconds(config.cache_time as i64);
     let cache_path = config.cache_path.clone();
@@ -38,7 +38,7 @@ pub async fn backgroud_task(config: Arc<Config>) {
                 });
             }
         })
-        .expect("Error spawning job scheduler thread");
+        .expect("Error spawning job scheduler thread")
 }
 
 async fn handle_backgroud_task(

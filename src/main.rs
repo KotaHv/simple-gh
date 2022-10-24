@@ -1,8 +1,9 @@
-use std::sync::Arc;
+use std::{sync::Arc, thread};
 
 use chrono::Local;
 use dotenvy::dotenv;
 use warp::{
+    http::StatusCode,
     log::{Info, Log},
     Filter,
 };
@@ -26,17 +27,29 @@ async fn main() {
         .parse_write_style(&config.log.style)
         .init();
     let log = log_custom("simple-gh");
-    task::backgroud_task(config.clone()).await;
+    let task_jh = task::backgroud_task(config.clone()).await;
     let client = reqwest::Client::new();
-    let gh = gh::routes(client.clone(), config.clone()).with(log);
-    let routes = alive().or(warp::path("gh").and(gh));
+    let gh_routes = gh::routes(client.clone(), config.clone()).with(log);
+    let routes = alive_routes(Arc::new(task_jh)).or(warp::path("gh").and(gh_routes));
     warp::serve(routes).run(config.addr).await;
 }
 
-fn alive() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+fn alive_routes(
+    task_jh: Arc<thread::JoinHandle<()>>,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("alive")
         .and(warp::get())
-        .map(|| Local::now().to_string())
+        .map(move || task_jh.clone())
+        .map(alive)
+}
+
+fn alive(task_jh: Arc<thread::JoinHandle<()>>) -> Box<dyn warp::Reply> {
+    if task_jh.is_finished() {
+        error!("background task failed");
+        return Box::new(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    debug!("background task success");
+    Box::new(Local::now().to_string())
 }
 
 fn launch_info() {
