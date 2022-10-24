@@ -10,8 +10,8 @@ use rocket::tokio::{
 use crate::config::Config;
 use crate::util;
 
-pub async fn backgroud_task(config: Config) -> thread::JoinHandle<()> {
-    info!(target:"BackgroundTask","Starting Backgroud Task");
+pub async fn background_task(config: Config) -> thread::JoinHandle<()> {
+    info!(target:"BackgroundTask","Starting Background Task");
     let cache_time = chrono::Duration::seconds(config.cache_time as i64);
     let cache_path = config.cache_path.clone();
     let max_cache = config.max_cache;
@@ -26,7 +26,7 @@ pub async fn backgroud_task(config: Config) -> thread::JoinHandle<()> {
             let mut sched = JobScheduler::new();
 
             sched.add(Job::new("*/10 * * * * *".parse().unwrap(), || {
-                runtime.spawn(handle_backgroud_task(
+                runtime.spawn(handle_background_task(
                     cache_time,
                     cache_path.clone(),
                     max_cache,
@@ -43,7 +43,7 @@ pub async fn backgroud_task(config: Config) -> thread::JoinHandle<()> {
         .expect("Error spawning job scheduler thread")
 }
 
-async fn handle_backgroud_task(
+async fn handle_background_task(
     cache_time: chrono::Duration,
     cache_path: PathBuf,
     max_cache: u64,

@@ -22,7 +22,7 @@ async fn main() -> Result<(), rocket::Error> {
     dotenv().ok();
     init_logger();
     let config = init_config();
-    let task_jh = task::backgroud_task(config.clone()).await;
+    let task_jh = task::background_task(config.clone()).await;
     let _ = rocket::build()
         .mount("/", routes![alive])
         .mount("/gh", gh::routes())
