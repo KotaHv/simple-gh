@@ -82,7 +82,7 @@ async fn get_gh(
     config: Arc<Config>,
     gh_path: String,
     client: Client,
-) -> Result<impl Reply, Rejection> {
+) -> Result<Box<dyn Reply>, Rejection> {
     let file_str = gh_path.replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
     let typepath = util::typepath(&filepath);
@@ -91,10 +91,10 @@ async fn get_gh(
         match fs::read(&filepath).await {
             Ok(content) => {
                 let content_type = util::content_type_typepath(&typepath).await;
-                return Ok(Response::builder()
+                let res = Response::builder()
                     .header("content-type", content_type)
-                    .body(content)
-                    .into_response());
+                    .body(content);
+                return Ok(Box::new(res));
             }
             Err(e) => {
                 error!("{file_str}: {e}");
@@ -148,7 +148,7 @@ async fn get_gh(
         .header("content-type", content_type)
         .status(status_code)
         .body(data);
-    Ok(response.into_response())
+    Ok(Box::new(response))
 }
 
 #[derive(Debug)]
