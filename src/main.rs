@@ -3,6 +3,7 @@ use std::io::Write;
 use config::init_config;
 use dotenvy::dotenv;
 use log::LevelFilter;
+use rocket::{http::Status, State};
 
 #[macro_use]
 extern crate rocket;
@@ -21,12 +22,13 @@ async fn main() -> Result<(), rocket::Error> {
     dotenv().ok();
     init_logger();
     let config = init_config();
-    task::backgroud_task(config.clone()).await;
+    let task_jh = task::backgroud_task(config.clone()).await;
     let _ = rocket::build()
         .mount("/", routes![alive])
         .mount("/gh", gh::routes())
         .manage(create_client())
         .manage(config)
+        .manage(task_jh)
         .attach(fairing::Logging())
         .launch()
         .await;
@@ -39,8 +41,13 @@ fn create_client() -> reqwest::Client {
 }
 
 #[get("/alive")]
-fn alive() -> String {
-    chrono::Local::now().to_string()
+fn alive(task_jh: &State<std::thread::JoinHandle<()>>) -> Result<String, Status> {
+    if task_jh.is_finished() {
+        error!("background task failed");
+        return Err(Status::InternalServerError);
+    }
+    debug!("background task success");
+    Ok(chrono::Local::now().to_string())
 }
 
 fn launch_info() {

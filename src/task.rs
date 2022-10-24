@@ -10,7 +10,7 @@ use rocket::tokio::{
 use crate::config::Config;
 use crate::util;
 
-pub async fn backgroud_task(config: Config) {
+pub async fn backgroud_task(config: Config) -> thread::JoinHandle<()> {
     info!(target:"BackgroundTask","Starting Backgroud Task");
     let cache_time = chrono::Duration::seconds(config.cache_time as i64);
     let cache_path = config.cache_path.clone();
@@ -40,7 +40,7 @@ pub async fn backgroud_task(config: Config) {
                 });
             }
         })
-        .expect("Error spawning job scheduler thread");
+        .expect("Error spawning job scheduler thread")
 }
 
 async fn handle_backgroud_task(
