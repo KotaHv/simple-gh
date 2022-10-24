@@ -32,6 +32,6 @@ ENV PYTHONPATH=/app
 
 EXPOSE 80
 
-HEALTHCHECK --interval=60s --timeout=10s CMD ["/healthcheck.sh"]
+HEALTHCHECK --interval=10s --timeout=5s CMD ["/healthcheck.sh"]
 
 CMD [ "/start.sh" ]
