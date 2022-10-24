@@ -16,19 +16,13 @@ pub fn routes() -> Vec<Route> {
     routes![get_gh]
 }
 
-#[derive(Responder)]
-enum GhResponse {
-    Status(Status),
-    Response((Status, (ContentType, Vec<u8>))),
-}
-
 #[get("/<github_path..>")]
 async fn get_gh(
     github_path: PathGuard,
     client: &State<reqwest::Client>,
     config: &State<Config>,
     _token: Token,
-) -> GhResponse {
+) -> Result<(Status, (ContentType, Vec<u8>)), Status> {
     let github_path = github_path.0;
     let file_str = github_path.clone().replace("/", "_");
     let filepath = config.cache_path.join(&file_str);
@@ -38,7 +32,7 @@ async fn get_gh(
         match fs::read(&filepath).await {
             Ok(content) => {
                 let content_type = util::content_type_typepath(&typepath).await;
-                return GhResponse::Response((Status::Ok, (content_type, content)));
+                return Ok((Status::Ok, (content_type, content)));
             }
             Err(e) => {
                 error!("{file_str}: {e}");
@@ -54,7 +48,7 @@ async fn get_gh(
         Ok(res) => res,
         Err(e) => {
             error!("{github_path}: {e}");
-            return GhResponse::Status(Status::InternalServerError);
+            return Err(Status::InternalServerError);
         }
     };
 
@@ -84,7 +78,7 @@ async fn get_gh(
             warn!("{file_str} content-length is None");
         }
     }
-    GhResponse::Response((status_code, (content_type, data)))
+    Ok((status_code, (content_type, data)))
 }
 
 struct PathGuard(String);
