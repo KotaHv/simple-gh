@@ -17,6 +17,8 @@ mod gh;
 mod task;
 mod util;
 
+use util::get_ip;
+
 #[tokio::main]
 async fn main() {
     launch_info();
@@ -60,11 +62,7 @@ fn launch_info() {
 
 fn log_custom(name: &'static str) -> Log<impl Fn(Info<'_>) + Copy> {
     warp::log::custom(move |info: Info| {
-        let ip = match info.remote_addr() {
-            Some(addr) => addr.to_string(),
-            None => "Unknown".to_string(),
-        };
-        let ip = Paint::cyan(ip);
+        let ip = Paint::cyan(get_ip(&info));
         let method = Paint::green(info.method());
         let path = Paint::blue(info.path());
         let status = Paint::yellow(info.status());
