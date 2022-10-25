@@ -10,6 +10,7 @@ from .config import settings
 from . import gh
 from .gh.background import bt
 from .logger import logger
+from .util import get_ip
 
 LOGGING_ROUTE_BLACKLIST = ["/alive"]
 
@@ -70,8 +71,7 @@ def register_middleware(app: FastAPI):
         process_time = process_time / 1000 / 1000  # ms
         process_time = f"{process_time:.4f} ms"
         response.headers["X-Process-Time"] = process_time
-        client = f"{request.client.host}:{request.client.port}"
-        ip = request.headers.get("X-Real-IP", client)
+        ip = get_ip(request)
         status = (
             f"{response.status_code} {http.HTTPStatus(response.status_code).phrase}"
         )
