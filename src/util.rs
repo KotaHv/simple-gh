@@ -32,12 +32,19 @@ pub async fn content_type_typepath(typepath: &PathBuf) -> ContentType {
 }
 
 pub fn get_ip(request: &Request) -> String {
-    let mut ip = "Unknown".to_string();
-    let ip_option = request.client_ip();
-    if ip_option.is_some() {
-        ip = ip_option.unwrap().to_string();
+    if let Some(ip) = request.headers().get_one("X-Forwarded-For") {
+        if let Some(ip) = ip.split_once(",") {
+            ip.0.to_string()
+        } else {
+            ip.to_string()
+        }
+    } else {
+        if let Some(ip) = request.client_ip() {
+            ip.to_string()
+        } else {
+            "Unknown".to_string()
+        }
     }
-    ip
 }
 
 pub fn typepath(filepath: &PathBuf) -> PathBuf {
