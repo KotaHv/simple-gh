@@ -14,7 +14,7 @@ pub struct Config {
     pub file_max: u64,
     pub max_cache: u64,
     pub cache_time: u32,
-    pub token: String,
+    pub token: Option<String>,
     pub log: Log,
     pub addr: SocketAddr,
 }
@@ -82,7 +82,10 @@ impl Config {
         let cache_time = dotenvy::var("SIMPLE_GH_CACHE_TIME").unwrap_or((60 * 60 * 24).to_string());
         cache_time.parse().unwrap()
     }
-    fn token() -> String {
-        dotenvy::var("SIMPLE_GH_TOKEN").unwrap_or("".to_string())
+    fn token() -> Option<String> {
+        match dotenvy::var("SIMPLE_GH_TOKEN") {
+            Ok(token) => Some(token),
+            Err(_) => None,
+        }
     }
 }

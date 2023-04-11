@@ -38,7 +38,7 @@ async fn main() {
 
 fn alive_routes(
     task_jh: Arc<thread::JoinHandle<()>>,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!("alive")
         .and(warp::get())
         .map(move || task_jh.clone())

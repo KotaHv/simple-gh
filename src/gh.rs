@@ -21,20 +21,18 @@ struct GhQuery {
 pub fn routes(
     client: Client,
     config: Arc<Config>,
-) -> impl Filter<Extract = impl Reply, Error = warp::Rejection> + Clone {
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     gh_route(client.clone(), config.clone()).recover(handle_rejection)
 }
 
 fn gh_route(
     client: Client,
     config: Arc<Config>,
-) -> impl Filter<Extract = impl Reply, Error = warp::Rejection> + Clone {
-    let route;
-    if config.token.is_empty() {
-        route = with_config(config.clone()).boxed();
-    } else {
-        route = token_guard(config.clone()).boxed();
-    }
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    let route = match config.token {
+        Some(_) => token_guard(config.clone()).boxed(),
+        None => with_config(config.clone()).boxed(),
+    };
     route
         .and(warp::get())
         .and(path_guard())
@@ -50,8 +48,10 @@ fn token_guard(
         .and_then(move |q: GhQuery| {
             let config = config.clone();
             async move {
-                if !config.token.is_empty() && config.token != q.token {
-                    return Err(reject::not_found());
+                if let Some(token) = &config.token {
+                    if token != &q.token {
+                        return Err(reject::not_found());
+                    }
                 }
                 Ok(config)
             }
