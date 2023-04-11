@@ -23,7 +23,7 @@ job_scheduler_ng = "*"
 
 [profile.release]
 lto = true
-opt-level = 3
+opt-level = "z"
 strip = true  # Automatically strip symbols from the binary.
 codegen-units = 1
 panic = "abort"
