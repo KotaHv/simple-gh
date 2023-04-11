@@ -109,7 +109,7 @@ async fn get_gh(
         Ok(res) => res,
         Err(e) => {
             error!("{gh_path}: {e:?}");
-            return Err(reject::custom(InternalServerError));
+            return Err(reject::custom(RequestError(e.to_string())));
         }
     };
     let is_success = res.status().is_success();
@@ -152,21 +152,22 @@ async fn get_gh(
 }
 
 #[derive(Debug)]
-struct InternalServerError;
+struct RequestError(String);
 
-impl reject::Reject for InternalServerError {}
+impl reject::Reject for RequestError {}
 
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
     if err.is_not_found() || err.find::<reject::InvalidQuery>().is_some() {
         return Ok(warp::reply::with_status(
-            StatusCode::NOT_FOUND.canonical_reason().unwrap_or_default(),
+            StatusCode::NOT_FOUND
+                .canonical_reason()
+                .unwrap_or_default()
+                .to_string(),
             StatusCode::NOT_FOUND,
         ));
-    } else if let Some(InternalServerError) = err.find() {
+    } else if let Some(RequestError(reason)) = err.find() {
         return Ok(warp::reply::with_status(
-            StatusCode::INTERNAL_SERVER_ERROR
-                .canonical_reason()
-                .unwrap_or_default(),
+            reason.to_string(),
             StatusCode::INTERNAL_SERVER_ERROR,
         ));
     }
