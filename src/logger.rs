@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use chrono::Local;
 use chrono::SecondsFormat;
-use env_logger::{
-    fmt::{Color, Style, StyledValue},
-    Builder,
-};
+use env_logger::Builder;
 use log::Level;
+use warp::log::{Info, Log};
+use yansi::{Color, Paint};
 
 use crate::config::Config;
+use crate::util::get_ip;
 
 pub fn init_logger(config: Arc<Config>) {
     let mut builder = Builder::new();
@@ -16,8 +16,13 @@ pub fn init_logger(config: Arc<Config>) {
         .format(|buf, record| {
             use std::io::Write;
             let target = record.target();
-            let mut style = buf.style();
-            let level = colored_level(&mut style, record.level());
+            let level = match record.level() {
+                Level::Error => Paint::red("ERROR"),
+                Level::Warn => Paint::yellow("WARN"),
+                Level::Info => Paint::green("INFO"),
+                Level::Debug => Paint::blue("DEBUG"),
+                Level::Trace => Paint::magenta("TRACE"),
+            };
             let mut style = buf.style();
             let target = style.set_bold(true).value(target);
             writeln!(
@@ -34,12 +39,28 @@ pub fn init_logger(config: Arc<Config>) {
         .init();
 }
 
-fn colored_level<'a>(style: &'a mut Style, level: Level) -> StyledValue<'a, &'static str> {
-    match level {
-        Level::Trace => style.set_color(Color::Magenta).value("TRACE"),
-        Level::Debug => style.set_color(Color::Blue).value("DEBUG"),
-        Level::Info => style.set_color(Color::Green).value("INFO "),
-        Level::Warn => style.set_color(Color::Yellow).value("WARN "),
-        Level::Error => style.set_color(Color::Red).value("ERROR"),
-    }
+pub fn warp_log_custom(name: &'static str) -> Log<impl Fn(Info<'_>) + Copy> {
+    warp::log::custom(move |info: Info| {
+        let ip = Paint::cyan(get_ip(&info));
+        let method = Paint::green(info.method());
+        let path = Paint::blue(info.path());
+        let status = Paint::yellow(info.status());
+        let referer = info.referer().unwrap_or("-");
+        let elapsed = info.elapsed();
+        if status.inner().is_success() {
+            return info!(
+                target: name,
+                "{ip} {method} {path} => {status} \"{referer}\" {elapsed:?}"
+            );
+        }
+        let ua = info.user_agent().unwrap_or("no ua");
+        let ua = Paint::magenta(ua);
+        warn!(
+            target: name,
+            "{ip} {method} {path} => {status} \"{referer}\" [{ua}] {elapsed:?}",
+            ip = ip.fg(Color::Red).bold(),
+            path = path.fg(Color::Red).underline(),
+            status = status.fg(Color::Red).dimmed()
+        );
+    })
 }
