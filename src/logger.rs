@@ -23,8 +23,7 @@ pub fn init_logger(config: Arc<Config>) {
                 Level::Debug => Paint::blue("DEBUG"),
                 Level::Trace => Paint::magenta("TRACE"),
             };
-            let mut style = buf.style();
-            let target = style.set_bold(true).value(target);
+            let target = Paint::new(target).bold();
             writeln!(
                 buf,
                 " {} {} {} > {}",
