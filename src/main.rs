@@ -14,6 +14,7 @@ extern crate log;
 
 mod config;
 mod gh;
+mod logger;
 mod task;
 mod util;
 
@@ -24,10 +25,7 @@ async fn main() {
     launch_info();
     dotenv().ok();
     let config = Arc::new(config::init_config());
-    pretty_env_logger::formatted_timed_builder()
-        .parse_filters(&config.log.level)
-        .parse_write_style(&config.log.style)
-        .init();
+    logger::init_logger(config.clone());
     let log = log_custom("simple-gh");
     let task_jh = task::background_task(config.clone()).await;
     let client = reqwest::Client::new();
