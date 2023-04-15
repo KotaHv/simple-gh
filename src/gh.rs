@@ -68,18 +68,18 @@ async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejec
     let file_str = gh_path.replace("/", "_");
     let filepath = CONFIG.cache_path.join(&file_str);
     let typepath = util::typepath(&filepath);
-    if filepath.exists() {
-        debug!("{file_str} is exists");
-        match fs::read(&filepath).await {
-            Ok(content) => {
-                let content_type = util::content_type_typepath(&typepath).await;
-                let res = Response::builder()
-                    .header("content-type", content_type)
-                    .body(content);
-                return Ok(Box::new(res));
-            }
-            Err(e) => {
-                error!("{file_str}: {e}");
+    match fs::read(&filepath).await {
+        Ok(content) => {
+            debug!("{file_str} is exists");
+            let content_type = util::content_type_typepath(&typepath).await;
+            let res = Response::builder()
+                .header("content-type", content_type)
+                .body(content);
+            return Ok(Box::new(res));
+        }
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                error!("{file_str}: {e}")
             }
         }
     }
@@ -104,12 +104,10 @@ async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejec
     }
     let content_length_option = res.content_length();
     let content = res.bytes().await.unwrap();
-    // let data = content.;
-    let data: Vec<u8> = content.to_vec();
     if is_success {
         if let Some(content_length) = content_length_option {
             if content_length <= CONFIG.file_max {
-                fs::write(&filepath, &data).await.ok();
+                fs::write(&filepath, &content).await.ok();
                 fs::write(&typepath, &content_type).await.ok();
             } else {
                 warn!(
@@ -129,7 +127,7 @@ async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejec
     let response = Response::builder()
         .header("content-type", content_type)
         .status(status_code)
-        .body(data);
+        .body(content);
     Ok(Box::new(response))
 }
 
