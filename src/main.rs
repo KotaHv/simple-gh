@@ -1,6 +1,6 @@
 use std::{sync::Arc, thread};
 
-use chrono::Local;
+use chrono::{Local, SecondsFormat};
 use dotenvy::dotenv;
 use warp::{http::StatusCode, Filter};
 
@@ -41,7 +41,7 @@ fn alive(task_jh: Arc<thread::JoinHandle<()>>) -> Box<dyn warp::Reply> {
         return Box::new(StatusCode::INTERNAL_SERVER_ERROR);
     }
     debug!("background task success");
-    Box::new(Local::now().to_string())
+    Box::new(Local::now().to_rfc3339_opts(SecondsFormat::Millis, false))
 }
 
 fn launch_info() {
