@@ -1,4 +1,4 @@
-use std::{convert::Infallible, sync::Arc};
+use std::convert::Infallible;
 
 use byte_unit::Byte;
 use reqwest::Client;
@@ -10,7 +10,7 @@ use warp::{
     reject, Filter, Rejection, Reply,
 };
 
-use crate::config::Config;
+use crate::config::CONFIG;
 use crate::util;
 
 #[derive(Deserialize, Serialize)]
@@ -20,42 +20,22 @@ struct GhQuery {
 
 pub fn routes(
     client: Client,
-    config: Arc<Config>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    gh_route(client.clone(), config.clone()).recover(handle_rejection)
+    gh_route(client.clone()).recover(handle_rejection)
 }
 
 fn gh_route(
     client: Client,
-    config: Arc<Config>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    let route = match config.token {
-        Some(_) => token_guard(config.clone()).boxed(),
-        None => with_config(config.clone()).boxed(),
+    let route = match CONFIG.token {
+        Some(_) => token_guard().boxed(),
+        None => warp::any().boxed(),
     };
     route
         .and(warp::get())
         .and(path_guard())
         .and(with_client(client))
         .and_then(get_gh)
-}
-
-fn token_guard(
-    config: Arc<Config>,
-) -> impl Filter<Extract = (Arc<Config>,), Error = Rejection> + Clone {
-    warp::any()
-        .and(warp::query::<GhQuery>())
-        .and_then(move |q: GhQuery| {
-            let config = config.clone();
-            async move {
-                if let Some(token) = &config.token {
-                    if token != &q.token {
-                        return Err(reject::not_found());
-                    }
-                }
-                Ok(config)
-            }
-        })
 }
 
 fn path_guard() -> impl Filter<Extract = (String,), Error = Rejection> + Clone {
@@ -68,23 +48,25 @@ fn path_guard() -> impl Filter<Extract = (String,), Error = Rejection> + Clone {
     })
 }
 
+fn token_guard() -> impl Filter<Extract = (), Error = Rejection> + Clone {
+    warp::any()
+        .and(warp::query::<GhQuery>())
+        .and_then(|q: GhQuery| async move {
+            if Some(q.token) != CONFIG.token {
+                return Err(reject::not_found());
+            }
+            Ok(())
+        })
+        .untuple_one()
+}
+
 fn with_client(client: Client) -> impl Filter<Extract = (Client,), Error = Infallible> + Clone {
     warp::any().map(move || client.clone())
 }
 
-fn with_config(
-    config: Arc<Config>,
-) -> impl Filter<Extract = (Arc<Config>,), Error = Infallible> + Clone {
-    warp::any().map(move || config.clone())
-}
-
-async fn get_gh(
-    config: Arc<Config>,
-    gh_path: String,
-    client: Client,
-) -> Result<Box<dyn Reply>, Rejection> {
+async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejection> {
     let file_str = gh_path.replace("/", "_");
-    let filepath = config.cache_path.join(&file_str);
+    let filepath = CONFIG.cache_path.join(&file_str);
     let typepath = util::typepath(&filepath);
     if filepath.exists() {
         debug!("{file_str} is exists");
@@ -126,7 +108,7 @@ async fn get_gh(
     let data: Vec<u8> = content.to_vec();
     if is_success {
         if let Some(content_length) = content_length_option {
-            if content_length <= config.file_max {
+            if content_length <= CONFIG.file_max {
                 fs::write(&filepath, &data).await.ok();
                 fs::write(&typepath, &content_type).await.ok();
             } else {
@@ -135,7 +117,7 @@ async fn get_gh(
                     Byte::from_bytes(content_length)
                         .get_appropriate_unit(true)
                         .to_string(),
-                    Byte::from_bytes(config.file_max)
+                    Byte::from_bytes(CONFIG.file_max)
                         .get_appropriate_unit(true)
                         .to_string()
                 );

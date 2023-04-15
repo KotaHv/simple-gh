@@ -1,18 +1,13 @@
 use std::io::{self, ErrorKind};
-use std::path::PathBuf;
-use std::sync::Arc;
 use std::thread;
 
 use tokio::fs::{create_dir_all, read_dir, DirEntry};
 
-use crate::config::Config;
+use crate::config::CONFIG;
 use crate::util;
 
-pub async fn background_task(config: Arc<Config>) -> thread::JoinHandle<()> {
+pub async fn background_task() -> thread::JoinHandle<()> {
     info!(target:"BackgroundTask","Starting Background Task");
-    let cache_time = chrono::Duration::seconds(config.cache_time as i64);
-    let cache_path = config.cache_path.clone();
-    let max_cache = config.max_cache;
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
     thread::Builder::new()
@@ -24,11 +19,7 @@ pub async fn background_task(config: Arc<Config>) -> thread::JoinHandle<()> {
             let mut sched = JobScheduler::new();
 
             sched.add(Job::new("*/10 * * * * *".parse().unwrap(), || {
-                runtime.spawn(handle_background_task(
-                    cache_time,
-                    cache_path.clone(),
-                    max_cache,
-                ));
+                runtime.spawn(handle_background_task());
             }));
 
             loop {
@@ -41,18 +32,16 @@ pub async fn background_task(config: Arc<Config>) -> thread::JoinHandle<()> {
         .expect("Error spawning job scheduler thread")
 }
 
-async fn handle_background_task(
-    cache_time: chrono::Duration,
-    cache_path: PathBuf,
-    max_cache: u64,
-) -> io::Result<()> {
-    let mut entries = match read_dir(&cache_path).await {
+async fn handle_background_task() -> io::Result<()> {
+    let cache_time = chrono::Duration::seconds(CONFIG.cache_time as i64);
+    let max_cache = CONFIG.max_cache;
+    let mut entries = match read_dir(&CONFIG.cache_path).await {
         Ok(entries) => entries,
         Err(e) => {
             error!("{:?}:{e}", e.kind());
             if e.kind() == ErrorKind::NotFound {
-                error!("mkdir: {:?}", cache_path);
-                create_dir_all(&cache_path).await.ok();
+                error!("mkdir: {:?}", CONFIG.cache_path);
+                create_dir_all(&CONFIG.cache_path).await.ok();
             }
             return Err(e);
         }

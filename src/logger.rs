@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use chrono::Local;
 use chrono::SecondsFormat;
 use env_logger::Builder;
@@ -7,10 +5,10 @@ use log::Level;
 use warp::log::{Info, Log};
 use yansi::{Color, Paint};
 
-use crate::config::Config;
+use crate::config::CONFIG;
 use crate::util::get_ip;
 
-pub fn init_logger(config: Arc<Config>) {
+pub fn init_logger() {
     let mut builder = Builder::new();
     builder
         .format(|buf, record| {
@@ -33,8 +31,8 @@ pub fn init_logger(config: Arc<Config>) {
                 record.args(),
             )
         })
-        .parse_filters(&config.log.level)
-        .parse_write_style(&config.log.style)
+        .parse_filters(&CONFIG.log.level)
+        .parse_write_style(&CONFIG.log.style)
         .init();
 }
 

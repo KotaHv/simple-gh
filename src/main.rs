@@ -17,14 +17,13 @@ mod util;
 async fn main() {
     launch_info();
     dotenv().ok();
-    let config = Arc::new(config::init_config());
-    logger::init_logger(config.clone());
+    logger::init_logger();
     let log = logger::warp_log_custom("simple-gh");
-    let task_jh = task::background_task(config.clone()).await;
+    let task_jh = task::background_task().await;
     let client = reqwest::Client::new();
-    let gh_routes = gh::routes(client.clone(), config.clone()).with(log);
+    let gh_routes = gh::routes(client.clone()).with(log);
     let routes = alive_routes(Arc::new(task_jh)).or(warp::path("gh").and(gh_routes));
-    warp::serve(routes).run(config.addr).await;
+    warp::serve(routes).run(config::CONFIG.addr).await;
 }
 
 fn alive_routes(
