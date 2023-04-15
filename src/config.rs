@@ -1,91 +1,80 @@
-use std::fs::create_dir_all;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-#[derive(Clone, Debug)]
+use figment::{providers::Env, Figment};
+use once_cell::unsync::Lazy;
+use serde::Deserialize;
+
+pub const CONFIG: Lazy<Config> = Lazy::new(|| init_config());
+
+#[derive(Deserialize, Debug)]
 pub struct Log {
+    #[serde(default = "config_default::log_level")]
     pub level: String,
+    #[serde(default = "config_default::log_style")]
     pub style: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Config {
+    #[serde(default = "config_default::cache_path")]
     pub cache_path: PathBuf,
+    #[serde(default = "config_default::file_max")]
     pub file_max: u64,
+    #[serde(default = "config_default::max_cache")]
     pub max_cache: u64,
+    #[serde(default = "config_default::cache_time")]
     pub cache_time: u32,
+    #[serde(default)]
     pub token: Option<String>,
     pub log: Log,
+    #[serde(default = "config_default::addr")]
     pub addr: SocketAddr,
 }
 
 pub fn init_config() -> Config {
-    let log = Config::log();
-    let cache_path = Config::cache_path();
-    let (file_max, file_max_str) = Config::file_max();
-    let (max_cache, max_cache_str) = Config::max_cache();
-    if file_max > max_cache {
-        panic!(
-            "SIMPLE_GH_FILE_MAX({}) cannot be greater than SIMPLE_GH_MAX_CACHE({})",
-            file_max_str, max_cache_str
-        );
-    }
-    let cache_time = Config::cache_time();
-    let token = Config::token();
-    let addr = Config::addr();
-    Config {
-        cache_path,
-        file_max,
-        max_cache,
-        cache_time,
-        token,
-        log,
-        addr,
+    let config = Figment::from(Env::prefixed("SIMPLE_GH_"))
+        .merge(Env::prefixed("SIMPLE_GH_").split("_"))
+        .extract();
+    match config {
+        Ok(config) => config,
+        Err(err) => {
+            panic!("{:?}", err);
+        }
     }
 }
 
-impl Config {
-    fn addr() -> SocketAddr {
-        let address = dotenvy::var("SIMPLE_GH_ADDRESS").unwrap_or("127.0.0.1".to_string());
-        let port = dotenvy::var("SIMPLE_GH_PORT").unwrap_or("3030".to_string());
-        format!("{address}:{port}").parse::<SocketAddr>().unwrap()
+mod config_default {
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::{Path, PathBuf},
+    };
+
+    pub fn cache_path() -> PathBuf {
+        Path::new("cache").to_owned()
     }
-    fn log() -> Log {
-        let level = dotenvy::var("SIMPLE_GH_LOG_LEVEL").unwrap_or("info".to_string());
-        let style = dotenvy::var("SIMPLE_GH_LOG_STYLE").unwrap_or("auto".to_string());
-        Log { level, style }
+
+    pub fn file_max() -> u64 {
+        byte_unit::Byte::from_str("24MiB").unwrap().get_bytes()
     }
-    fn cache_path() -> PathBuf {
-        let cache_str = dotenvy::var("SIMPLE_GH_CACHE_DIR").unwrap_or("cache".to_string());
-        let cache_path = Path::new(&cache_str);
-        if !cache_path.exists() {
-            info!("mkdir: {}", cache_str);
-            create_dir_all(cache_path).ok();
-        }
-        cache_path.to_owned()
+
+    pub fn max_cache() -> u64 {
+        byte_unit::Byte::from_str("512MiB").unwrap().get_bytes()
     }
-    fn file_max() -> (u64, String) {
-        let file_max_str = dotenvy::var("SIMPLE_GH_FILE_MAX").unwrap_or("24MiB".to_string());
-        let file_max = byte_unit::Byte::from_str(&file_max_str)
-            .unwrap()
-            .get_bytes();
-        (file_max, file_max_str)
+
+    pub fn cache_time() -> u32 {
+        60 * 60 * 24
     }
-    fn max_cache() -> (u64, String) {
-        let max_cache_str = dotenvy::var("SIMPLE_GH_MAX_CACHE").unwrap_or("512MiB".to_string());
-        let max_cache = byte_unit::Byte::from_str(&max_cache_str)
-            .unwrap()
-            .get_bytes();
-        (max_cache, max_cache_str)
+
+    pub fn addr() -> SocketAddr {
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3030)
     }
-    fn cache_time() -> u32 {
-        let cache_time = dotenvy::var("SIMPLE_GH_CACHE_TIME").unwrap_or((60 * 60 * 24).to_string());
-        cache_time.parse().unwrap()
+
+    pub fn log_level() -> String {
+        "INFO".to_string()
     }
-    fn token() -> Option<String> {
-        match dotenvy::var("SIMPLE_GH_TOKEN") {
-            Ok(token) => Some(token),
-            Err(_) => None,
-        }
+
+    pub fn log_style() -> String {
+        "always".to_string()
     }
 }
