@@ -15,6 +15,15 @@ pub struct Log {
     pub style: String,
 }
 
+impl Default for Log {
+    fn default() -> Self {
+        Log {
+            level: config_default::log_level(),
+            style: config_default::log_style(),
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Config {
     #[serde(default = "config_default::cache_path")]
@@ -27,6 +36,7 @@ pub struct Config {
     pub cache_time: u32,
     #[serde(default)]
     pub token: Option<String>,
+    #[serde(default)]
     pub log: Log,
     #[serde(default = "config_default::addr")]
     pub addr: SocketAddr,
