@@ -11,7 +11,6 @@ pub async fn background_task() -> task::JoinHandle<()> {
     info!(target:"BackgroundTask","Starting Background Task");
     task::spawn(async {
         let cache_time = chrono::Duration::seconds(CONFIG.cache_time as i64);
-        let max_cache = CONFIG.max_cache;
         loop {
             let mut entries = match read_dir(&CONFIG.cache_path).await {
                 Ok(entries) => entries,
@@ -48,7 +47,7 @@ pub async fn background_task() -> task::JoinHandle<()> {
                     }
                 }
             }
-            if cache_size > max_cache {
+            if cache_size > CONFIG.max_cache {
                 warn!("Exceed the maximum cache");
                 debug!("{files:?}");
                 files.sort_by(|a, b| a.1.cmp(&b.1));
@@ -57,7 +56,7 @@ pub async fn background_task() -> task::JoinHandle<()> {
                     warn!("delete file {:?}", file.file_name());
                     util::remove_file(&file.path()).await;
                     cache_size -= size;
-                    if cache_size <= max_cache {
+                    if cache_size <= CONFIG.max_cache {
                         break;
                     }
                 }
