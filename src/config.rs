@@ -2,10 +2,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use figment::{providers::Env, Figment};
-use once_cell::unsync::Lazy;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 
-pub const CONFIG: Lazy<Config> = Lazy::new(|| init_config());
+pub static CONFIG: Lazy<Config> = Lazy::new(|| init_config());
 
 #[derive(Deserialize, Debug)]
 pub struct Log {
@@ -47,7 +47,10 @@ pub fn init_config() -> Config {
         .merge(Env::prefixed("SIMPLE_GH_").split("_"))
         .extract();
     match config {
-        Ok(config) => config,
+        Ok(config) => {
+            println!("{:#?}", config);
+            config
+        }
         Err(err) => {
             panic!("{:?}", err);
         }
