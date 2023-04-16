@@ -16,7 +16,7 @@ VOLUME /cache
 EXPOSE 80
 
 WORKDIR /
-COPY --from=builder /app/simple-gh .
+COPY --from=builder /app/target/release/simple-gh .
 
 COPY docker/healthcheck.sh /healthcheck.sh
 COPY docker/start.sh /start.sh
