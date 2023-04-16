@@ -1,0 +1,20 @@
+[Unit]
+After=network.target NetworkManager.service systemd-networkd.service iwd.service
+
+[Service]
+Type=simple
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+Restart=always
+ExecStartPre=/usr/bin/sleep 1s
+ExecStart=/opt/simple-gh/simple-gh
+WorkingDirectory=/opt/simple-gh
+Environment="SIMPLE_GH_TOKEN=123abcd"
+Environment="SIMPLE_GH_LOG_LEVEL=info"
+Environment="SIMPLE_GH_LOG_STYLE=auto"
+Environment="SIMPLE_GH_FILE_MAX=20MiB"
+Environment="SIMPLE_GH_CACHE_MAX=512MiB"
+Environment="SIMPLE_GH_CACHE_EXPIRY=3600"
+
+[Install]
+WantedBy=multi-user.target

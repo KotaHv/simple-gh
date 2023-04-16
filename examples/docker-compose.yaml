@@ -1,0 +1,17 @@
+services:
+  simple-gh:
+    image: ghcr.io/kotahv/simple-gh:latest
+    container_name: simple-gh
+    hostname: simple-gh
+    environment:
+      - SIMPLE_GH_TOKEN=123abcd
+      - SIMPLE_GH_LOG_LEVEL=info
+      - SIMPLE_GH_LOG_STYLE=auto
+      - SIMPLE_GH_FILE_MAX=20MiB
+      - SIMPLE_GH_CACHE_MAX=512MiB # 536870912 | 512MB Mib: 1024*1024 MB: 1000*1000
+      - SIMPLE_GH_CACHE_EXPIRY=3600 # seconds
+    volumes:
+      - <Your Path>:/cache
+    restart: unless-stopped
+    ports:
+      - 12345:80
