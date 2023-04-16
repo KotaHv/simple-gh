@@ -1,13 +1,17 @@
+use std::fmt;
+use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::{net::SocketAddr, path::Path};
 
+use figment::providers::Serialized;
 use figment::{providers::Env, Figment};
 use once_cell::sync::Lazy;
-use serde::Deserialize;
+use serde::de::Visitor;
+use serde::{Deserialize, Deserializer, Serialize};
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| init_config());
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct Log {
     #[serde(default = "Log::level")]
     pub level: String,
@@ -34,11 +38,11 @@ impl Log {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct Cache {
     #[serde(default = "Cache::path")]
     pub path: PathBuf,
-    #[serde(default = "Cache::max")]
+    #[serde(default = "Cache::max", deserialize_with = "deserialize_with_size")]
     pub max: u64,
     #[serde(default = "Cache::expiry")]
     pub expiry: u32,
@@ -65,28 +69,77 @@ impl Cache {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct Config {
-    #[serde(default = "config_default::cache_path")]
-    pub cache_path: PathBuf,
-    #[serde(default = "config_default::file_max")]
+    #[serde(deserialize_with = "deserialize_with_size")]
     pub file_max: u64,
-    #[serde(default = "config_default::max_cache")]
-    pub max_cache: u64,
-    #[serde(default = "config_default::cache_time")]
-    pub cache_time: u32,
-    #[serde(default)]
     pub token: Option<String>,
-    #[serde(default)]
     pub log: Log,
-    #[serde(default = "config_default::addr")]
     pub addr: SocketAddr,
-    #[serde(default)]
     pub cache: Cache,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            file_max: Config::file_max(),
+            token: None,
+            log: Log::default(),
+            addr: Config::addr(),
+            cache: Cache::default(),
+        }
+    }
+}
+
+impl Config {
+    fn file_max() -> u64 {
+        byte_unit::Byte::from_str("24MiB").unwrap().get_bytes()
+    }
+    fn addr() -> SocketAddr {
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3030)
+    }
+}
+
+fn deserialize_with_size<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct SizeVisitor;
+
+    impl<'de> Visitor<'de> for SizeVisitor {
+        type Value = u64;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("unsigned integer or string with units of bytes")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(byte_unit::Byte::from_str(v).unwrap().get_bytes())
+        }
+
+        fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(byte_unit::Byte::from_str(&v).unwrap().get_bytes())
+        }
+
+        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v)
+        }
+    }
+    deserializer.deserialize_any(SizeVisitor)
+}
+
 pub fn init_config() -> Config {
-    let config = Figment::from(Env::prefixed("SIMPLE_GH_"))
+    let config = Figment::from(Serialized::defaults(Config::default()))
+        .merge(Env::prefixed("SIMPLE_GH_"))
         .merge(Env::prefixed("SIMPLE_GH_").split("_"))
         .extract();
     match config {
@@ -97,32 +150,5 @@ pub fn init_config() -> Config {
         Err(err) => {
             panic!("{:?}", err);
         }
-    }
-}
-
-mod config_default {
-    use std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::{Path, PathBuf},
-    };
-
-    pub fn cache_path() -> PathBuf {
-        Path::new("cache").to_owned()
-    }
-
-    pub fn file_max() -> u64 {
-        byte_unit::Byte::from_str("24MiB").unwrap().get_bytes()
-    }
-
-    pub fn max_cache() -> u64 {
-        byte_unit::Byte::from_str("512MiB").unwrap().get_bytes()
-    }
-
-    pub fn cache_time() -> u32 {
-        60 * 60 * 24
-    }
-
-    pub fn addr() -> SocketAddr {
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3030)
     }
 }
