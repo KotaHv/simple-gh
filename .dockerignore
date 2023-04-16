@@ -7,3 +7,4 @@ Dockerfile
 .dockerignore
 .vscode
 Dockerfile*
+!examples/.env
