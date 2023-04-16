@@ -1,6 +1,5 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, str::FromStr};
 
-use byte_unit::Byte;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -64,13 +63,52 @@ fn with_client(client: Client) -> impl Filter<Extract = (Client,), Error = Infal
     warp::any().map(move || client.clone())
 }
 
+struct Request {
+    url: String,
+    client: Client,
+}
+
+impl Request {
+    fn new(client: Client, gh_path: &str) -> Self {
+        Request {
+            url: format!("https://raw.githubusercontent.com/{gh_path}"),
+            client,
+        }
+    }
+    async fn get(&self) -> Result<reqwest::Response, RequestError> {
+        match self.client.get(&self.url).send().await {
+            Ok(res) => Ok(res),
+            Err(e) => {
+                error!("{}: {:?}", self.url, e);
+                return Err(RequestError {
+                    reason: e.to_string(),
+                    status: StatusCode::INTERNAL_SERVER_ERROR,
+                });
+            }
+        }
+    }
+
+    async fn head(&self) -> Result<reqwest::Response, RequestError> {
+        match self.client.head(&self.url).send().await {
+            Ok(res) => Ok(res),
+            Err(e) => {
+                error!("{}: {:?}", self.url, e);
+                return Err(RequestError {
+                    reason: e.to_string(),
+                    status: StatusCode::INTERNAL_SERVER_ERROR,
+                });
+            }
+        }
+    }
+}
+
 async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejection> {
-    let file_str = gh_path.replace("/", "_");
-    let filepath = CONFIG.cache_path.join(&file_str);
+    let filepath = gh_path.replace("/", "_");
+    let filepath = CONFIG.cache_path.join(filepath);
     let typepath = util::typepath(&filepath);
     match fs::read(&filepath).await {
         Ok(content) => {
-            debug!("{file_str} is exists");
+            debug!("{filepath:?} is exists");
             let content_type = util::content_type_typepath(&typepath).await;
             let res = Response::builder()
                 .header("content-type", content_type)
@@ -79,50 +117,45 @@ async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejec
         }
         Err(e) => {
             if e.kind() != std::io::ErrorKind::NotFound {
-                error!("{file_str}: {e}")
+                error!("{filepath:?}: {e}")
             }
         }
     }
-    let res = match client
-        .get(format!("https://raw.githubusercontent.com/{gh_path}"))
-        .send()
-        .await
-    {
+    let req = Request::new(client, &gh_path);
+    let res = match req.head().await {
         Ok(res) => res,
-        Err(e) => {
-            error!("{gh_path}: {e:?}");
-            return Err(reject::custom(RequestError(e.to_string())));
-        }
+        Err(re) => return Err(reject::custom(re)),
     };
-    let is_success = res.status().is_success();
-    let status_code = StatusCode::from_u16(res.status().as_u16()).unwrap();
-    let mut content_type = "application/octet-stream".to_string();
-    if let Some(ct) = res.headers().get(reqwest::header::CONTENT_TYPE) {
-        if let Ok(ct) = ct.to_str() {
-            content_type = ct.to_string();
+    match res.content_length() {
+        Some(content_length) => {
+            if content_length > CONFIG.file_max {
+                return Err(reject::custom(RequestError {
+                    reason: format!("{} > {}", content_length, CONFIG.file_max),
+                    status: StatusCode::PAYLOAD_TOO_LARGE,
+                }));
+            }
+        }
+        None => {
+            return Err(reject::custom(RequestError {
+                reason: format!("{:#?}", res.headers()),
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+            }))
         }
     }
-    let content_length_option = res.content_length();
+    let status_code = StatusCode::from_str(res.status().as_str()).unwrap();
+    let content_type = match res.headers().get(reqwest::header::CONTENT_TYPE) {
+        Some(ct) => ct.to_str().unwrap(),
+        None => "application/octet-stream",
+    };
+    let is_success = status_code.is_success();
+    let res = match req.get().await {
+        Ok(res) => res,
+        Err(re) => return Err(reject::custom(re)),
+    };
     let content = res.bytes().await.unwrap();
     if is_success {
-        if let Some(content_length) = content_length_option {
-            if content_length <= CONFIG.file_max {
-                fs::write(&filepath, &content).await.ok();
-                fs::write(&typepath, &content_type).await.ok();
-            } else {
-                warn!(
-                    "{gh_path} content-length:{} > {}",
-                    Byte::from_bytes(content_length)
-                        .get_appropriate_unit(true)
-                        .to_string(),
-                    Byte::from_bytes(CONFIG.file_max)
-                        .get_appropriate_unit(true)
-                        .to_string()
-                );
-            }
-        } else {
-            warn!("{gh_path} content-length is None");
-        }
+        fs::write(&filepath, &content).await.ok();
+        fs::write(&typepath, &content_type).await.ok();
     }
     let response = Response::builder()
         .header("content-type", content_type)
@@ -132,7 +165,10 @@ async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejec
 }
 
 #[derive(Debug)]
-struct RequestError(String);
+struct RequestError {
+    reason: String,
+    status: StatusCode,
+}
 
 impl reject::Reject for RequestError {}
 
@@ -145,10 +181,10 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
                 .to_string(),
             StatusCode::NOT_FOUND,
         ));
-    } else if let Some(RequestError(reason)) = err.find() {
+    } else if let Some(RequestError { reason, status }) = err.find() {
         return Ok(warp::reply::with_status(
             reason.to_string(),
-            StatusCode::INTERNAL_SERVER_ERROR,
+            status.to_owned(),
         ));
     }
     Err(err)
