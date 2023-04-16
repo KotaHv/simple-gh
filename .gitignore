@@ -2,3 +2,4 @@
 .env
 /cache
 .DS_Store
+!examples/.env
