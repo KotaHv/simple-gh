@@ -14,8 +14,8 @@ services:
       - SIMPLE_GH_LOG_LEVEL=info
       - SIMPLE_GH_LOG_STYLE=auto
       - SIMPLE_GH_FILE_MAX=20MiB
-      - SIMPLE_GH_MAX_CACHE=512MiB # 536870912 | 512MB Mib: 1024*1024 MB: 1000*1000
-      - SIMPLE_GH_CACHE_TIME=3600 # seconds
+      - SIMPLE_GH_CACHE_MAX=512MiB # 536870912 | 512MB Mib: 1024*1024 MB: 1000*1000
+      - SIMPLE_GH_CACHE_EXPIRY=3600 # seconds
     volumes:
       - <Your Path>:/cache
     restart: unless-stopped
