@@ -104,7 +104,7 @@ impl Request {
 
 async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejection> {
     let filepath = gh_path.replace("/", "_");
-    let filepath = CONFIG.cache_path.join(filepath);
+    let filepath = CONFIG.cache.path.join(filepath);
     let typepath = util::typepath(&filepath);
     match fs::read(&filepath).await {
         Ok(content) => {

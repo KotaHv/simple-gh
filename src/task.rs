@@ -10,15 +10,15 @@ use crate::util;
 pub async fn background_task() -> task::JoinHandle<()> {
     info!(target:"BackgroundTask","Starting Background Task");
     task::spawn(async {
-        let cache_time = chrono::Duration::seconds(CONFIG.cache_time as i64);
+        let cache_time = chrono::Duration::seconds(CONFIG.cache.expiry as i64);
         loop {
-            let mut entries = match read_dir(&CONFIG.cache_path).await {
+            let mut entries = match read_dir(&CONFIG.cache.path).await {
                 Ok(entries) => entries,
                 Err(e) => {
                     error!("{:?}:{e}", e.kind());
                     if e.kind() == ErrorKind::NotFound {
-                        error!("mkdir: {:?}", CONFIG.cache_path);
-                        create_dir_all(&CONFIG.cache_path).await.ok();
+                        error!("mkdir: {:?}", CONFIG.cache.path);
+                        create_dir_all(&CONFIG.cache.path).await.ok();
                     }
                     continue;
                 }
@@ -47,7 +47,7 @@ pub async fn background_task() -> task::JoinHandle<()> {
                     }
                 }
             }
-            if cache_size > CONFIG.max_cache {
+            if cache_size > CONFIG.cache.max {
                 warn!("Exceed the maximum cache");
                 debug!("{files:?}");
                 files.sort_by(|a, b| a.1.cmp(&b.1));
@@ -56,7 +56,7 @@ pub async fn background_task() -> task::JoinHandle<()> {
                     warn!("delete file {:?}", file.file_name());
                     util::remove_file(&file.path()).await;
                     cache_size -= size;
-                    if cache_size <= CONFIG.max_cache {
+                    if cache_size <= CONFIG.cache.max {
                         break;
                     }
                 }
