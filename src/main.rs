@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread};
+use std::sync::Arc;
 
 use chrono::{Local, SecondsFormat};
 use dotenvy::dotenv;
@@ -26,8 +26,10 @@ async fn main() {
     warp::serve(routes).run(config::CONFIG.addr).await;
 }
 
+type Task = Arc<tokio::task::JoinHandle<()>>;
+
 fn alive_routes(
-    task_jh: Arc<thread::JoinHandle<()>>,
+    task_jh: Task,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!("alive")
         .and(warp::get())
@@ -35,7 +37,7 @@ fn alive_routes(
         .map(alive)
 }
 
-fn alive(task_jh: Arc<thread::JoinHandle<()>>) -> Box<dyn warp::Reply> {
+fn alive(task_jh: Task) -> Box<dyn warp::Reply> {
     if task_jh.is_finished() {
         error!("background task failed");
         return Box::new(StatusCode::INTERNAL_SERVER_ERROR);
