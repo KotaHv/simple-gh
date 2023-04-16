@@ -130,7 +130,15 @@ async fn get_gh(gh_path: String, client: Client) -> Result<Box<dyn Reply>, Rejec
         Some(content_length) => {
             if content_length > CONFIG.file_max {
                 return Err(reject::custom(RequestError {
-                    reason: format!("{} > {}", content_length, CONFIG.file_max),
+                    reason: format!(
+                        "file size: {} > {}",
+                        byte_unit::Byte::from_bytes(content_length)
+                            .get_appropriate_unit(true)
+                            .to_string(),
+                        byte_unit::Byte::from_bytes(CONFIG.file_max)
+                            .get_appropriate_unit(true)
+                            .to_string()
+                    ),
                     status: StatusCode::PAYLOAD_TOO_LARGE,
                 }));
             }
