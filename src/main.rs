@@ -1,4 +1,8 @@
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    get,
+    middleware::{self, TrailingSlash},
+    web, App, HttpResponse, HttpServer, Responder,
+};
 use chrono::{Local, SecondsFormat};
 
 #[macro_use]
@@ -24,6 +28,7 @@ async fn main() -> std::io::Result<()> {
             .service(alive)
             .service(web::scope("/gh").configure(gh::routes))
             .wrap(logger::log_custom())
+            .wrap(middleware::NormalizePath::new(TrailingSlash::MergeOnly))
     })
     .bind(config::CONFIG.addr)?
     .run()
