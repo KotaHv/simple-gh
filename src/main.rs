@@ -10,19 +10,22 @@ use tokio::task::JoinHandle;
 extern crate log;
 
 mod config;
+mod error;
 mod gh;
 mod logger;
 mod task;
 mod util;
 
 #[get("/alive")]
-async fn alive(task: web::Data<JoinHandle<()>>) -> impl Responder {
+async fn alive(task: web::Data<JoinHandle<()>>) -> Result<impl Responder, error::CustomError> {
     if task.is_finished() {
         error!("background task failed");
-        return HttpResponse::InternalServerError().body("background task failed");
+        return Err(error::CustomError::reason(
+            "background task failed".to_string(),
+        ));
     }
     debug!("background task success");
-    HttpResponse::Ok().body(Local::now().to_rfc3339_opts(SecondsFormat::Millis, false))
+    Ok(HttpResponse::Ok().body(Local::now().to_rfc3339_opts(SecondsFormat::Millis, false)))
 }
 
 #[actix_web::main]

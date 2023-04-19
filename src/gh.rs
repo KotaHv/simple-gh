@@ -8,6 +8,7 @@ use serde::Deserialize;
 use tokio::fs;
 
 use crate::config::CONFIG;
+use crate::error::CustomError;
 use crate::util;
 
 pub fn routes(path: &str) -> Scope {
@@ -18,12 +19,6 @@ pub fn routes(path: &str) -> Scope {
         get_gh = get_gh.guard(TokenGuard)
     }
     web::scope(path).service(get_gh)
-}
-
-#[derive(Debug)]
-struct RequestError {
-    reason: String,
-    status: StatusCode,
 }
 
 struct Request {
@@ -38,34 +33,31 @@ impl Request {
             client,
         }
     }
-    async fn get(&self) -> Result<reqwest::Response, RequestError> {
+    async fn get(&self) -> Result<reqwest::Response, CustomError> {
         match self.client.get(&self.url).send().await {
             Ok(res) => Ok(res),
             Err(e) => {
                 error!("{}: {:?}", self.url, e);
-                return Err(RequestError {
-                    reason: e.to_string(),
-                    status: StatusCode::INTERNAL_SERVER_ERROR,
-                });
+                return Err(CustomError::reason(e.to_string()));
             }
         }
     }
 
-    async fn head(&self) -> Result<reqwest::Response, RequestError> {
+    async fn head(&self) -> Result<reqwest::Response, CustomError> {
         match self.client.head(&self.url).send().await {
             Ok(res) => Ok(res),
             Err(e) => {
                 error!("{}: {:?}", self.url, e);
-                return Err(RequestError {
-                    reason: e.to_string(),
-                    status: StatusCode::INTERNAL_SERVER_ERROR,
-                });
+                return Err(CustomError::reason(e.to_string()));
             }
         }
     }
 }
 
-async fn get_gh(gh_path: web::Path<String>, client: web::Data<Client>) -> impl Responder {
+async fn get_gh(
+    gh_path: web::Path<String>,
+    client: web::Data<Client>,
+) -> Result<impl Responder, CustomError> {
     let filepath = gh_path.replace("/", "_");
     let filepath = CONFIG.cache.path.join(filepath);
     let typepath = util::typepath(&filepath);
@@ -73,9 +65,9 @@ async fn get_gh(gh_path: web::Path<String>, client: web::Data<Client>) -> impl R
         Ok(content) => {
             debug!("{filepath:?} is exists");
             let content_type = util::content_type_typepath(&typepath).await;
-            return HttpResponse::build(StatusCode::OK)
+            return Ok(HttpResponse::build(StatusCode::OK)
                 .append_header(("content-type", content_type))
-                .body(content);
+                .body(content));
         }
         Err(e) => {
             if e.kind() != std::io::ErrorKind::NotFound {
@@ -86,12 +78,12 @@ async fn get_gh(gh_path: web::Path<String>, client: web::Data<Client>) -> impl R
     let req = Request::new(client, &gh_path);
     let res = match req.head().await {
         Ok(res) => res,
-        Err(re) => return HttpResponse::build(re.status).body(re.reason),
+        Err(re) => return Err(re),
     };
     match res.content_length() {
         Some(content_length) => {
             if content_length > CONFIG.file_max {
-                return HttpResponse::build(StatusCode::PAYLOAD_TOO_LARGE).body(format!(
+                let reason = format!(
                     "file size: {} > {}",
                     byte_unit::Byte::from_bytes(content_length)
                         .get_appropriate_unit(true)
@@ -99,13 +91,11 @@ async fn get_gh(gh_path: web::Path<String>, client: web::Data<Client>) -> impl R
                     byte_unit::Byte::from_bytes(CONFIG.file_max)
                         .get_appropriate_unit(true)
                         .to_string()
-                ));
+                );
+                return Err(CustomError::new(reason, StatusCode::PAYLOAD_TOO_LARGE));
             }
         }
-        None => {
-            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!("{:#?}", res.headers()))
-        }
+        None => return Err(CustomError::reason(format!("{:#?}", res.headers()))),
     }
     let status_code = res.status();
     let is_success = status_code.is_success();
@@ -115,16 +105,16 @@ async fn get_gh(gh_path: web::Path<String>, client: web::Data<Client>) -> impl R
     };
     let res = match req.get().await {
         Ok(res) => res,
-        Err(re) => return HttpResponse::build(re.status).body(re.reason),
+        Err(re) => return Err(re),
     };
     let content = res.bytes().await.unwrap();
     if is_success {
         fs::write(&filepath, &content).await.ok();
         fs::write(&typepath, &content_type).await.ok();
     }
-    HttpResponse::build(status_code)
+    Ok(HttpResponse::build(status_code)
         .append_header(("content-type", content_type))
-        .body(content)
+        .body(content))
 }
 
 struct PathGuard;
