@@ -1,5 +1,6 @@
 use actix_web::{
     get,
+    http::StatusCode,
     middleware::{self, TrailingSlash},
     web, App, HttpResponse, HttpServer, Responder,
 };
@@ -42,6 +43,9 @@ async fn main() -> std::io::Result<()> {
             .service(gh::routes("/gh"))
             .wrap(logger::log_custom())
             .wrap(middleware::NormalizePath::new(TrailingSlash::MergeOnly))
+            .default_service(web::to(|| async {
+                HttpResponse::NotFound().body(StatusCode::NOT_FOUND.to_string())
+            }))
     })
     .bind(config::CONFIG.addr)?
     .run()
