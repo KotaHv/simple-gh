@@ -1,6 +1,7 @@
 use actix_web::{http::header, HttpRequest};
+use chrono::{DateTime, Utc};
 use mime_guess;
-use std::{ffi::OsStr, path::PathBuf};
+use std::{ffi::OsStr, fs::Metadata, path::PathBuf};
 use tokio::fs;
 
 pub fn typepath(filepath: &PathBuf) -> PathBuf {
@@ -22,6 +23,15 @@ pub async fn content_type_typepath(typepath: &PathBuf) -> String {
                 .first_or_octet_stream()
                 .to_string(),
         )
+}
+
+pub async fn remove_file(filepath: &PathBuf) {
+    fs::remove_file(filepath).await.ok();
+    fs::remove_file(typepath(filepath)).await.ok();
+}
+
+pub fn create_date(metadata: &Metadata) -> DateTime<Utc> {
+    DateTime::from(metadata.created().unwrap_or(metadata.modified().unwrap()))
 }
 
 pub fn get_ip(req: &HttpRequest) -> String {
