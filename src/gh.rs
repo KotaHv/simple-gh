@@ -1,8 +1,21 @@
-use actix_web::{get, http::StatusCode, web, HttpResponse, Responder};
+use actix_web::{
+    guard::{Guard, GuardContext},
+    http::StatusCode,
+    web, HttpResponse, Responder, Scope,
+};
 use reqwest::Client;
+use serde::Deserialize;
 
-pub fn routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(get_gh);
+use crate::config::CONFIG;
+
+pub fn routes(path: &str) -> Scope {
+    let mut get_gh = web::resource("/{gh_path:.*}")
+        .guard(PathGuard)
+        .route(web::get().to(get_gh));
+    if CONFIG.token.is_some() {
+        get_gh = get_gh.guard(TokenGuard)
+    }
+    web::scope(path).service(get_gh)
 }
 
 #[derive(Debug)]
@@ -50,7 +63,6 @@ impl Request {
     }
 }
 
-#[get("/{gh_path:.*}")]
 async fn get_gh(gh_path: web::Path<String>, client: web::Data<Client>) -> impl Responder {
     let req = Request::new(client, &gh_path);
     let res = match req.get().await {
@@ -67,4 +79,37 @@ async fn get_gh(gh_path: web::Path<String>, client: web::Data<Client>) -> impl R
     HttpResponse::build(status_code)
         .append_header(("content-type", content_type))
         .body(content)
+}
+
+struct PathGuard;
+
+impl Guard for PathGuard {
+    fn check(&self, ctx: &GuardContext<'_>) -> bool {
+        let len = ctx.head().uri.path().split('/').count();
+        if len >= 5 {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct GHParams {
+    token: String,
+}
+
+struct TokenGuard;
+
+impl Guard for TokenGuard {
+    fn check(&self, ctx: &GuardContext<'_>) -> bool {
+        if let Some(params) = ctx.head().uri.query() {
+            if let Ok(params) = web::Query::<GHParams>::from_query(params) {
+                if Some(&params.token) == CONFIG.token.as_ref() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }

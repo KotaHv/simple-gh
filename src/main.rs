@@ -26,7 +26,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(reqwest::Client::new()))
             .service(alive)
-            .service(web::scope("/gh").configure(gh::routes))
+            .service(gh::routes("/gh"))
             .wrap(logger::log_custom())
             .wrap(middleware::NormalizePath::new(TrailingSlash::MergeOnly))
     })
