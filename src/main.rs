@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use actix_web::{
     get,
     middleware::{self, TrailingSlash},
@@ -18,7 +16,7 @@ mod task;
 mod util;
 
 #[get("/alive")]
-async fn alive(task: web::Data<Arc<JoinHandle<()>>>) -> impl Responder {
+async fn alive(task: web::Data<JoinHandle<()>>) -> impl Responder {
     if task.is_finished() {
         error!("background task failed");
         return HttpResponse::InternalServerError().body("background task failed");
@@ -31,11 +29,12 @@ async fn alive(task: web::Data<Arc<JoinHandle<()>>>) -> impl Responder {
 async fn main() -> std::io::Result<()> {
     launch_info();
     logger::init_logger();
-    let task_jh = Arc::new(task::background_task().await);
+    let client = web::Data::new(reqwest::Client::new());
+    let task_jh = web::Data::new(task::background_task().await);
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(reqwest::Client::new()))
-            .app_data(web::Data::new(task_jh.clone()))
+            .app_data(client.clone())
+            .app_data(task_jh.clone())
             .service(alive)
             .service(gh::routes("/gh"))
             .wrap(logger::log_custom())
