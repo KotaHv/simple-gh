@@ -16,6 +16,7 @@ async fn alive() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    launch_info();
     logger::init_logger();
     HttpServer::new(|| {
         App::new()
@@ -27,4 +28,10 @@ async fn main() -> std::io::Result<()> {
     .bind(config::CONFIG.addr)?
     .run()
     .await
+}
+
+fn launch_info() {
+    println!();
+    println!("=================== Starting Simple-Gh ===================");
+    println!();
 }
