@@ -1,4 +1,28 @@
 use actix_web::{http::header, HttpRequest};
+use mime_guess;
+use std::{ffi::OsStr, path::PathBuf};
+use tokio::fs;
+
+pub fn typepath(filepath: &PathBuf) -> PathBuf {
+    filepath.with_extension(format!(
+        "{}.type",
+        filepath
+            .extension()
+            .unwrap_or(OsStr::new(""))
+            .to_string_lossy()
+    ))
+}
+
+pub async fn content_type_typepath(typepath: &PathBuf) -> String {
+    fs::read(typepath)
+        .await
+        .map(|f| String::from_utf8_lossy(&f).to_string())
+        .unwrap_or(
+            mime_guess::from_path(typepath.with_extension(""))
+                .first_or_octet_stream()
+                .to_string(),
+        )
+}
 
 pub fn get_ip(req: &HttpRequest) -> String {
     let connection_info = req.connection_info();

@@ -5,8 +5,10 @@ use actix_web::{
 };
 use reqwest::Client;
 use serde::Deserialize;
+use tokio::fs;
 
 use crate::config::CONFIG;
+use crate::util;
 
 pub fn routes(path: &str) -> Scope {
     let mut get_gh = web::resource("/{gh_path:.*}")
@@ -64,18 +66,62 @@ impl Request {
 }
 
 async fn get_gh(gh_path: web::Path<String>, client: web::Data<Client>) -> impl Responder {
+    let filepath = gh_path.replace("/", "_");
+    let filepath = CONFIG.cache.path.join(filepath);
+    let typepath = util::typepath(&filepath);
+    match fs::read(&filepath).await {
+        Ok(content) => {
+            debug!("{filepath:?} is exists");
+            let content_type = util::content_type_typepath(&typepath).await;
+            return HttpResponse::build(StatusCode::OK)
+                .append_header(("content-type", content_type))
+                .body(content);
+        }
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                error!("{filepath:?}: {e}")
+            }
+        }
+    }
     let req = Request::new(client, &gh_path);
+    let res = match req.head().await {
+        Ok(res) => res,
+        Err(re) => return HttpResponse::build(re.status).body(re.reason),
+    };
+    match res.content_length() {
+        Some(content_length) => {
+            if content_length > CONFIG.file_max {
+                return HttpResponse::build(StatusCode::PAYLOAD_TOO_LARGE).body(format!(
+                    "file size: {} > {}",
+                    byte_unit::Byte::from_bytes(content_length)
+                        .get_appropriate_unit(true)
+                        .to_string(),
+                    byte_unit::Byte::from_bytes(CONFIG.file_max)
+                        .get_appropriate_unit(true)
+                        .to_string()
+                ));
+            }
+        }
+        None => {
+            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(format!("{:#?}", res.headers()))
+        }
+    }
+    let status_code = res.status();
+    let is_success = status_code.is_success();
+    let content_type = match res.headers().get(reqwest::header::CONTENT_TYPE) {
+        Some(ct) => ct.to_str().unwrap(),
+        None => "application/octet-stream",
+    };
     let res = match req.get().await {
         Ok(res) => res,
         Err(re) => return HttpResponse::build(re.status).body(re.reason),
     };
-    let status_code = res.status();
-    let content_type = match res.headers().get(reqwest::header::CONTENT_TYPE) {
-        Some(ct) => ct.to_str().unwrap(),
-        None => "application/octet-stream",
-    }
-    .to_string();
     let content = res.bytes().await.unwrap();
+    if is_success {
+        fs::write(&filepath, &content).await.ok();
+        fs::write(&typepath, &content_type).await.ok();
+    }
     HttpResponse::build(status_code)
         .append_header(("content-type", content_type))
         .body(content)
