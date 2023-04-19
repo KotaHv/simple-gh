@@ -24,7 +24,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::scope("/gh").configure(gh::routes))
             .wrap(logger::log_custom())
     })
-    .bind(("127.0.0.1", 3030))?
+    .bind(config::CONFIG.addr)?
     .run()
     .await
 }
