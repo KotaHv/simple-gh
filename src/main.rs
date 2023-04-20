@@ -5,7 +5,7 @@ use actix_web::{
     web, App, HttpResponse, HttpServer, Responder,
 };
 use chrono::{Local, SecondsFormat};
-use tokio::task::JoinHandle;
+use tokio::task::AbortHandle;
 
 #[macro_use]
 extern crate log;
@@ -18,7 +18,7 @@ mod task;
 mod util;
 
 #[get("/alive")]
-async fn alive(task: web::Data<JoinHandle<()>>) -> Result<impl Responder, error::CustomError> {
+async fn alive(task: web::Data<AbortHandle>) -> Result<impl Responder, error::CustomError> {
     if task.is_finished() {
         error!("background task failed");
         return Err(error::CustomError::reason(
@@ -34,11 +34,12 @@ async fn main() -> std::io::Result<()> {
     launch_info();
     logger::init_logger();
     let client = web::Data::new(reqwest::Client::new());
-    let task_jh = web::Data::new(task::background_task().await);
+    let (task_jh, task_cancel) = task::init_background_task();
+    let task_jh_state = web::Data::new(task_jh.abort_handle());
     HttpServer::new(move || {
         App::new()
             .app_data(client.clone())
-            .app_data(task_jh.clone())
+            .app_data(task_jh_state.clone())
             .service(alive)
             .service(gh::routes("/gh"))
             .wrap(logger::log_custom())
@@ -49,7 +50,10 @@ async fn main() -> std::io::Result<()> {
     })
     .bind(config::CONFIG.addr)?
     .run()
-    .await
+    .await?;
+    task_cancel.cancel();
+    task_jh.await.unwrap();
+    Ok(())
 }
 
 fn launch_info() {
