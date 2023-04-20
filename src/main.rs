@@ -3,7 +3,10 @@ use std::sync::Arc;
 use chrono::{Local, SecondsFormat};
 use dotenvy::dotenv;
 use tokio::{
-    signal,
+    signal::{
+        ctrl_c,
+        unix::{signal, SignalKind},
+    },
     sync::oneshot,
     task::{spawn, AbortHandle},
 };
@@ -19,7 +22,7 @@ mod task;
 mod util;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> std::io::Result<()> {
     launch_info();
     dotenv().ok();
     logger::init_logger();
@@ -32,13 +35,29 @@ async fn main() {
     let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(config::CONFIG.addr, async {
         info!("listening on http://{}", config::CONFIG.addr);
         rx.await.ok();
-        info!("SIGINT received; starting forced shutdown");
     });
     spawn(server);
-    signal::ctrl_c().await.unwrap();
+    let mut sigterm = signal(SignalKind::terminate())?;
+    let mut sigint = signal(SignalKind::interrupt())?;
+    let mut sigquit = signal(SignalKind::quit())?;
+    tokio::select! {
+        _ = sigint.recv() => {
+            info!("SIGINT received; starting forced shutdown");
+        },
+        _ = sigterm.recv() => {
+            info!("SIGTERM received; starting graceful shutdown");
+        },
+        _ = sigquit.recv() => {
+            info!("SIGQUIT received; starting forced shutdown");
+        },
+        _ = ctrl_c() => {
+            info!("SIGINT received; starting forced shutdown");
+        }
+    }
     let _ = tx.send(());
     task_cancel.cancel();
     task_jh.await.unwrap();
+    Ok(())
 }
 
 type Task = Arc<AbortHandle>;
