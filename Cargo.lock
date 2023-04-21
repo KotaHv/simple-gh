@@ -198,6 +198,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "figment"
 version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -684,10 +693,13 @@ dependencies = [
  "axum",
  "byte-unit",
  "chrono",
+ "env_logger",
  "figment",
+ "log",
  "once_cell",
  "serde",
  "tokio",
+ "yansi",
 ]
 
 [[package]]
