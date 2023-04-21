@@ -1,14 +1,22 @@
-use axum::{routing::get, Router};
+use axum::{middleware, routing::get, Router};
 use chrono::{Local, SecondsFormat};
 
+#[macro_use]
+extern crate log;
+
 mod config;
+mod logger;
+mod util;
 
 #[tokio::main]
 async fn main() {
     launch_info();
-    let app = Router::new().route("/alive", get(alive));
+    logger::init_logger();
+    let app = Router::new()
+        .route("/alive", get(alive))
+        .layer(middleware::from_fn(logger::logger_middleware));
     axum::Server::bind(&config::CONFIG.addr)
-        .serve(app.into_make_service())
+        .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
         .await
         .unwrap();
 }
