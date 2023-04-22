@@ -9,6 +9,7 @@ extern crate log;
 mod config;
 mod gh;
 mod logger;
+mod task;
 mod util;
 
 #[tokio::main]
@@ -16,6 +17,7 @@ async fn main() {
     launch_info();
     logger::init_logger();
     let client = Arc::new(reqwest::Client::new());
+    let (task_jh, task_cancel) = task::init_background_task();
     let app = Router::new()
         .route("/alive", get(alive))
         .nest("/gh", gh::routes(client.clone()))
@@ -25,6 +27,8 @@ async fn main() {
         .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
         .await
         .unwrap();
+    task_cancel.cancel();
+    task_jh.await.unwrap();
 }
 
 async fn alive() -> String {
