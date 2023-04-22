@@ -8,7 +8,6 @@ use axum::{
     Router,
 };
 use chrono::{Local, SecondsFormat};
-use reqwest::StatusCode;
 use tokio::signal::{
     ctrl_c,
     unix::{signal, SignalKind},
@@ -19,13 +18,16 @@ use tokio::task::AbortHandle;
 extern crate log;
 
 mod config;
+mod error;
 mod gh;
 mod logger;
 mod task;
 mod util;
 
+use crate::error::CustomError;
+
 #[tokio::main]
-async fn main() {
+async fn main() -> std::io::Result<()> {
     launch_info();
     logger::init_logger();
     info!("listening on http://{}", config::CONFIG.addr);
@@ -46,7 +48,8 @@ async fn main() {
         _ = shutdown_signal() => {}
     }
     task_cancel.cancel();
-    task_jh.await.unwrap();
+    task_jh.await?;
+    Ok(())
 }
 
 async fn shutdown_signal() -> std::io::Result<()> {
@@ -70,15 +73,15 @@ async fn shutdown_signal() -> std::io::Result<()> {
     Ok(())
 }
 
-async fn alive(State(task): State<Arc<AbortHandle>>) -> Response {
+async fn alive<'a>(State(task): State<Arc<AbortHandle>>) -> Result<Response, CustomError> {
     if task.is_finished() {
         error!("background task failed");
-        return (StatusCode::INTERNAL_SERVER_ERROR, "background task failed").into_response();
+        return Err(CustomError::reason("background task failed".to_string()));
     }
     debug!("background task success");
-    Local::now()
+    Ok(Local::now()
         .to_rfc3339_opts(SecondsFormat::Millis, false)
-        .into_response()
+        .into_response())
 }
 
 fn launch_info() {

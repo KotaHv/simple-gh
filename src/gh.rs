@@ -12,6 +12,7 @@ use reqwest::Client;
 use tokio::fs;
 
 use crate::config::CONFIG;
+use crate::error::CustomError;
 use crate::util;
 
 struct Request {
@@ -26,22 +27,22 @@ impl Request {
             client,
         }
     }
-    async fn get(&self) -> Result<reqwest::Response, reqwest::Error> {
-        match self.client.get(&self.url).send().await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("{}: {:?}", self.url, e);
-                Err(e)
-            }
-        }
+    async fn get(&self) -> Result<reqwest::Response, CustomError> {
+        Request::result(self.client.get(&self.url).send().await)
     }
 
-    async fn head(&self) -> Result<reqwest::Response, reqwest::Error> {
-        match self.client.head(&self.url).send().await {
+    async fn head(&self) -> Result<reqwest::Response, CustomError> {
+        Request::result(self.client.head(&self.url).send().await)
+    }
+
+    fn result(
+        res: Result<reqwest::Response, reqwest::Error>,
+    ) -> Result<reqwest::Response, CustomError> {
+        match res {
             Ok(res) => Ok(res),
             Err(e) => {
-                error!("{}: {:?}", self.url, e);
-                return Err(e);
+                error!("{:#?}", e);
+                Err(CustomError::reason(e.to_string()))
             }
         }
     }
@@ -51,7 +52,10 @@ pub fn routes() -> Router<Arc<Client>> {
     Router::new().route("/*gh_path", get(get_gh))
 }
 
-async fn get_gh(Path(gh_path): Path<String>, State(client): State<Arc<Client>>) -> Response {
+async fn get_gh<'a>(
+    Path(gh_path): Path<String>,
+    State(client): State<Arc<Client>>,
+) -> Result<Response, CustomError> {
     let filepath = gh_path.replace("/", "_");
     let filepath = CONFIG.cache.path.join(filepath);
     let typepath = util::typepath(&filepath);
@@ -59,12 +63,12 @@ async fn get_gh(Path(gh_path): Path<String>, State(client): State<Arc<Client>>) 
         Ok(content) => {
             debug!("{filepath:?} is exists");
             let content_type = util::content_type_typepath(&typepath).await;
-            return Response::builder()
+            return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", content_type)
                 .body(Full::from(content))
                 .unwrap()
-                .into_response();
+                .into_response());
         }
         Err(e) => {
             if e.kind() != std::io::ErrorKind::NotFound {
@@ -73,10 +77,7 @@ async fn get_gh(Path(gh_path): Path<String>, State(client): State<Arc<Client>>) 
         }
     }
     let req = Request::new(client, &gh_path);
-    let res = match req.head().await {
-        Ok(res) => res,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
-    };
+    let res = req.head().await?;
     match res.content_length() {
         Some(content_length) => {
             if content_length > CONFIG.file_max {
@@ -89,16 +90,10 @@ async fn get_gh(Path(gh_path): Path<String>, State(client): State<Arc<Client>>) 
                         .get_appropriate_unit(true)
                         .to_string()
                 );
-                return (StatusCode::PAYLOAD_TOO_LARGE, reason).into_response();
+                return Err(CustomError::new(reason, StatusCode::PAYLOAD_TOO_LARGE));
             }
         }
-        None => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("{:#?}", res.headers()),
-            )
-                .into_response()
-        }
+        None => return Err(CustomError::reason(format!("{:#?}", res.headers()))),
     }
     let status_code = res.status();
     let is_success = status_code.is_success();
@@ -106,20 +101,17 @@ async fn get_gh(Path(gh_path): Path<String>, State(client): State<Arc<Client>>) 
         Some(ct) => ct.to_str().unwrap(),
         None => "application/octet-stream",
     };
-    let res = match req.get().await {
-        Ok(res) => res,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
-    };
+    let res = req.get().await?;
     let content = res.bytes().await.unwrap();
     if is_success {
         fs::write(&filepath, &content).await.ok();
         fs::write(&typepath, &content_type).await.ok();
     }
     // (status_code, [("content-type", content_type)], content).into_response()
-    Response::builder()
+    Ok(Response::builder()
         .status(status_code)
         .header("content-type", content_type)
         .body(Full::from(content))
         .unwrap()
-        .into_response()
+        .into_response())
 }
