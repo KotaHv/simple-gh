@@ -35,7 +35,8 @@ async fn main() {
     let app = Router::new()
         .route("/alive", get(alive))
         .with_state(task_jh_state)
-        .nest("/gh", gh::routes(client.clone()))
+        .nest("/gh", gh::routes())
+        .with_state(client)
         .layer(middleware::from_fn(logger::logger_middleware));
 
     let server = axum::Server::bind(&config::CONFIG.addr)

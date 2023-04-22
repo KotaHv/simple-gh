@@ -47,10 +47,8 @@ impl Request {
     }
 }
 
-pub fn routes(client: Arc<Client>) -> Router {
-    Router::new()
-        .route("/*gh_path", get(get_gh))
-        .with_state(client.clone())
+pub fn routes() -> Router<Arc<Client>> {
+    Router::new().route("/*gh_path", get(get_gh))
 }
 
 async fn get_gh(Path(gh_path): Path<String>, State(client): State<Arc<Client>>) -> Response {
