@@ -12,14 +12,16 @@ pub struct CustomError {
 }
 
 impl CustomError {
-    pub fn reason(reason: String) -> Self {
+    pub fn reason(reason: impl Into<String>) -> Self {
+        let reason = reason.into();
         CustomError {
             reason,
             status: StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
-    pub fn new(reason: String, status: StatusCode) -> Self {
+    pub fn new(reason: impl Into<String>, status: StatusCode) -> Self {
+        let reason = reason.into();
         CustomError { reason, status }
     }
 }

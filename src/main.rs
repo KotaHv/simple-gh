@@ -76,7 +76,7 @@ async fn shutdown_signal() -> std::io::Result<()> {
 async fn alive<'a>(State(task): State<Arc<AbortHandle>>) -> Result<Response, CustomError> {
     if task.is_finished() {
         error!("background task failed");
-        return Err(CustomError::reason("background task failed".to_string()));
+        return Err(CustomError::reason("background task failed"));
     }
     debug!("background task success");
     Ok(Local::now()
