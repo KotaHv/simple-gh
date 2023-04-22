@@ -1,11 +1,19 @@
 use std::sync::Arc;
 
-use axum::{middleware, routing::get, Router};
+use axum::{
+    extract::State,
+    middleware,
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
 use chrono::{Local, SecondsFormat};
+use reqwest::StatusCode;
 use tokio::signal::{
     ctrl_c,
     unix::{signal, SignalKind},
 };
+use tokio::task::AbortHandle;
 
 #[macro_use]
 extern crate log;
@@ -23,8 +31,10 @@ async fn main() {
     info!("listening on http://{}", config::CONFIG.addr);
     let client = Arc::new(reqwest::Client::new());
     let (task_jh, task_cancel) = task::init_background_task();
+    let task_jh_state = Arc::new(task_jh.abort_handle());
     let app = Router::new()
         .route("/alive", get(alive))
+        .with_state(task_jh_state)
         .nest("/gh", gh::routes(client.clone()))
         .layer(middleware::from_fn(logger::logger_middleware));
 
@@ -59,8 +69,15 @@ async fn shutdown_signal() -> std::io::Result<()> {
     Ok(())
 }
 
-async fn alive() -> String {
-    Local::now().to_rfc3339_opts(SecondsFormat::Millis, false)
+async fn alive(State(task): State<Arc<AbortHandle>>) -> Response {
+    if task.is_finished() {
+        error!("background task failed");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "background task failed").into_response();
+    }
+    debug!("background task success");
+    Local::now()
+        .to_rfc3339_opts(SecondsFormat::Millis, false)
+        .into_response()
 }
 
 fn launch_info() {
