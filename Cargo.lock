@@ -882,6 +882,7 @@ dependencies = [
  "reqwest",
  "serde",
  "tokio",
+ "tokio-util",
  "yansi",
 ]
 
