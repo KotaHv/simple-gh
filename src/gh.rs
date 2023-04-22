@@ -19,7 +19,7 @@ struct Request {
     url: String,
     client: Arc<Client>,
 }
-
+type RequestOutput = Result<reqwest::Response, CustomError>;
 impl Request {
     fn new(client: Arc<Client>, gh_path: &str) -> Self {
         Request {
@@ -27,17 +27,15 @@ impl Request {
             client,
         }
     }
-    async fn get(&self) -> Result<reqwest::Response, CustomError> {
+    async fn get(&self) -> RequestOutput {
         Request::result(self.client.get(&self.url).send().await)
     }
 
-    async fn head(&self) -> Result<reqwest::Response, CustomError> {
+    async fn head(&self) -> RequestOutput {
         Request::result(self.client.head(&self.url).send().await)
     }
 
-    fn result(
-        res: Result<reqwest::Response, reqwest::Error>,
-    ) -> Result<reqwest::Response, CustomError> {
+    fn result(res: Result<reqwest::Response, reqwest::Error>) -> RequestOutput {
         match res {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -52,7 +50,7 @@ pub fn routes() -> Router<Arc<Client>> {
     Router::new().route("/*gh_path", get(get_gh))
 }
 
-async fn get_gh<'a>(
+async fn get_gh(
     Path(gh_path): Path<String>,
     State(client): State<Arc<Client>>,
 ) -> Result<Response, CustomError> {
