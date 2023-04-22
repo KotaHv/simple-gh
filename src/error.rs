@@ -1,5 +1,4 @@
 use axum::{
-    body::boxed,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -34,9 +33,6 @@ impl Display for CustomError {
 
 impl IntoResponse for CustomError {
     fn into_response(self) -> Response {
-        Response::builder()
-            .status(self.status)
-            .body(boxed(self.reason))
-            .unwrap()
+        (self.status, self.reason).into_response()
     }
 }
