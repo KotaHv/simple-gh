@@ -65,10 +65,7 @@ pub struct LoggerMiddleware<S> {
 
 impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for LoggerMiddleware<S>
 where
-    S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
-    S::Future: Send + 'static,
-    ReqBody: Send + 'static,
-    ResBody: Send + 'static,
+    S: Service<Request<ReqBody>, Response = Response<ResBody>>,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -109,9 +106,9 @@ pub struct LoggerFuture<F> {
     ua: String,
 }
 
-impl<F, ResBody, Error> Future for LoggerFuture<F>
+impl<F, ResBody, E> Future for LoggerFuture<F>
 where
-    F: Future<Output = Result<Response<ResBody>, Error>>,
+    F: Future<Output = Result<Response<ResBody>, E>>,
 {
     type Output = F::Output;
 
