@@ -35,8 +35,10 @@ async fn background_task(stop_signal: CancellationToken) {
             if let Ok(metadata) = entry.metadata().await {
                 if metadata.is_file() {
                     let filepath = entry.path();
-                    if filepath.extension().unwrap() == "type" {
-                        continue;
+                    if let Some(extension) = filepath.extension() {
+                        if extension == "type" {
+                            continue;
+                        }
                     }
                     let create_date = util::create_date(&metadata);
                     let duration = chrono::Utc::now() - create_date;
