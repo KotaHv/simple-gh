@@ -1,22 +1,31 @@
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use async_trait::async_trait;
 use axum::{
     body::Full,
     extract::{FromRequestParts, State},
-    http::{request::Parts, StatusCode},
+    http::{self, request::Parts, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Router,
 };
+use futures_util::future::BoxFuture;
 use reqwest::Client;
+use serde::Deserialize;
 use tokio::fs;
+use tower::{Layer, Service};
 
 use crate::config::CONFIG;
 use crate::error::CustomError;
 use crate::util;
 
 pub fn routes() -> Router<Arc<Client>> {
+    let mut get_gh = get(get_gh);
+    if CONFIG.token.is_some() {
+        debug!("TokenLayer");
+        get_gh = get_gh.route_layer(TokenLayer);
+    }
     Router::new().route("/*gh_path", get(get_gh))
 }
 
@@ -62,6 +71,62 @@ impl<S> FromRequestParts<S> for GHPath {
             0..=2 => Err(StatusCode::NOT_FOUND),
             _ => Ok(GHPath(path.to_string())),
         }
+    }
+}
+
+#[derive(Clone)]
+struct TokenLayer;
+
+impl<S> Layer<S> for TokenLayer {
+    type Service = TokenMiddleware<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        TokenMiddleware { inner }
+    }
+}
+
+#[derive(Clone)]
+struct TokenMiddleware<S> {
+    inner: S,
+}
+
+#[derive(Debug, Deserialize)]
+struct GHParams {
+    token: String,
+}
+
+impl<S, T> Service<http::Request<T>> for TokenMiddleware<S>
+where
+    S: Service<http::Request<T>, Response = Response> + Send + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: http::Request<T>) -> Self::Future {
+        let mut is_ok = false;
+        if let Some(params) = request.uri().query() {
+            if let Ok(params) = serde_urlencoded::from_str::<GHParams>(params) {
+                if Some(params.token) == CONFIG.token {
+                    is_ok = true;
+                }
+            }
+        }
+        let future = self.inner.call(request);
+        Box::pin(async move {
+            match is_ok {
+                true => {
+                    let response: Response = future.await?;
+                    Ok(response)
+                }
+                false => Ok(StatusCode::NOT_FOUND.into_response()),
+            }
+        })
     }
 }
 
