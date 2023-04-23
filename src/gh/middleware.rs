@@ -2,7 +2,7 @@ use std::task::{Context, Poll};
 
 use super::CONFIG;
 use axum::{
-    http::{self, StatusCode},
+    http::{Request, StatusCode},
     response::{IntoResponse, Response},
 };
 use futures_util::future::BoxFuture;
@@ -30,9 +30,9 @@ struct GHParams {
     token: String,
 }
 
-impl<S, T> Service<http::Request<T>> for TokenMiddleware<S>
+impl<S, T> Service<Request<T>> for TokenMiddleware<S>
 where
-    S: Service<http::Request<T>, Response = Response> + Send + 'static,
+    S: Service<Request<T>, Response = Response> + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = S::Response;
@@ -43,7 +43,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, request: http::Request<T>) -> Self::Future {
+    fn call(&mut self, request: Request<T>) -> Self::Future {
         let mut is_ok = false;
         if let Some(params) = request.uri().query() {
             if let Ok(params) = serde_urlencoded::from_str::<GHParams>(params) {
