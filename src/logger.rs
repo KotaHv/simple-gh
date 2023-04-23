@@ -121,30 +121,27 @@ where
         if this.path.as_str() == "/alive" {
             return Poll::Ready(Ok(res));
         }
-        match res.status().is_success() {
-            true => {
-                info!(
-                    "{ip} {method} {path} => {status} \"{referer}\" {elapsed:?}",
-                    ip = Paint::cyan(this.ip),
-                    method = Paint::green(this.method),
-                    path = Paint::blue(this.path),
-                    status = Paint::yellow(res.status()),
-                    referer = this.referer,
-                    elapsed = this.start.elapsed()
-                );
-            }
-            false => {
-                warn!(
-                    "{ip} {method} {path} => {status} \"{referer}\" [{ua}] {elapsed:?}",
-                    ip = Paint::red(this.ip).bold(),
-                    method = Paint::green(this.method),
-                    path = Paint::red(this.path).underline(),
-                    status = Paint::red(res.status()),
-                    referer = this.referer,
-                    elapsed = this.start.elapsed(),
-                    ua = Paint::magenta(this.ua),
-                )
-            }
+        if res.status().is_success() {
+            info!(
+                "{ip} {method} {path} => {status} \"{referer}\" {elapsed:?}",
+                ip = Paint::cyan(this.ip),
+                method = Paint::green(this.method),
+                path = Paint::blue(this.path),
+                status = Paint::yellow(res.status()),
+                referer = this.referer,
+                elapsed = this.start.elapsed()
+            );
+        } else {
+            warn!(
+                "{ip} {method} {path} => {status} \"{referer}\" [{ua}] {elapsed:?}",
+                ip = Paint::red(this.ip).bold(),
+                method = Paint::green(this.method),
+                path = Paint::red(this.path).underline(),
+                status = Paint::red(res.status()),
+                referer = this.referer,
+                elapsed = this.start.elapsed(),
+                ua = Paint::magenta(this.ua),
+            )
         }
         Poll::Ready(Ok(res))
     }
