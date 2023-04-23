@@ -1,11 +1,16 @@
-use std::task::{Context, Poll};
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use super::CONFIG;
 use axum::{
     http::{Request, StatusCode},
     response::{IntoResponse, Response},
 };
-use futures_util::future::BoxFuture;
+use futures_util::ready;
+use pin_project::pin_project;
 use serde::Deserialize;
 use tower::{Layer, Service};
 
@@ -30,20 +35,19 @@ struct GHParams {
     token: String,
 }
 
-impl<S, T> Service<Request<T>> for TokenMiddleware<S>
+impl<S, ReqBody> Service<Request<ReqBody>> for TokenMiddleware<S>
 where
-    S: Service<Request<T>, Response = Response> + Send + 'static,
-    S::Future: Send + 'static,
+    S: Service<Request<ReqBody>, Response = Response>,
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+    type Future = TokenFuture<S::Future>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, request: Request<T>) -> Self::Future {
+    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
         let mut is_ok = false;
         if let Some(params) = request.uri().query() {
             if let Ok(params) = serde_urlencoded::from_str::<GHParams>(params) {
@@ -52,15 +56,32 @@ where
                 }
             }
         }
-        let future = self.inner.call(request);
-        Box::pin(async move {
-            match is_ok {
-                true => {
-                    let response: Response = future.await?;
-                    Ok(response)
-                }
-                false => Ok(StatusCode::NOT_FOUND.into_response()),
-            }
-        })
+        let response_future = self.inner.call(request);
+        TokenFuture {
+            response_future,
+            is_ok,
+        }
+    }
+}
+
+#[pin_project]
+pub struct TokenFuture<F> {
+    #[pin]
+    response_future: F,
+    is_ok: bool,
+}
+
+impl<F, E> Future for TokenFuture<F>
+where
+    F: Future<Output = Result<Response, E>>,
+{
+    type Output = F::Output;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        if !this.is_ok.to_owned() {
+            return Poll::Ready(Ok(StatusCode::NOT_FOUND.into_response()));
+        }
+        let res = ready!(this.response_future.poll(cx)?);
+        Poll::Ready(Ok(res))
     }
 }
