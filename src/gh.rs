@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use axum::{
     body::Full,
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{FromRequestParts, State},
+    http::{request::Parts, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Router,
@@ -14,6 +15,10 @@ use tokio::fs;
 use crate::config::CONFIG;
 use crate::error::CustomError;
 use crate::util;
+
+pub fn routes() -> Router<Arc<Client>> {
+    Router::new().route("/*gh_path", get(get_gh))
+}
 
 struct Request {
     url: String,
@@ -46,12 +51,22 @@ impl Request {
     }
 }
 
-pub fn routes() -> Router<Arc<Client>> {
-    Router::new().route("/*gh_path", get(get_gh))
+struct GHPath(String);
+#[async_trait]
+impl<S> FromRequestParts<S> for GHPath {
+    type Rejection = StatusCode;
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let mut path = parts.uri.path();
+        path = path.trim_start_matches("/").trim_end_matches("/");
+        match path.split("/").count() {
+            0..=2 => Err(StatusCode::NOT_FOUND),
+            _ => Ok(GHPath(path.to_string())),
+        }
+    }
 }
 
 async fn get_gh(
-    Path(gh_path): Path<String>,
+    GHPath(gh_path): GHPath,
     State(client): State<Arc<Client>>,
 ) -> Result<Response, CustomError> {
     let filepath = gh_path.replace("/", "_");
@@ -102,8 +117,9 @@ async fn get_gh(
     let res = req.get().await?;
     let content = res.bytes().await.unwrap();
     if is_success {
-        fs::write(&filepath, &content).await.ok();
-        fs::write(&typepath, &content_type).await.ok();
+        if let Ok(_) = fs::write(&filepath, &content).await {
+            fs::write(&typepath, &content_type).await.ok();
+        }
     }
     // (status_code, [("content-type", content_type)], content).into_response()
     Ok(Response::builder()
