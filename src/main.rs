@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use axum::{
     extract::State,
-    middleware,
     response::{IntoResponse, Response},
     routing::get,
     Router,
@@ -39,7 +38,7 @@ async fn main() -> std::io::Result<()> {
         .with_state(task_jh_state)
         .nest("/gh", gh::routes())
         .with_state(client)
-        .layer(middleware::from_fn(logger::logger_middleware));
+        .layer(logger::LoggerLayer);
 
     let server = axum::Server::bind(&config::CONFIG.addr)
         .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>());
