@@ -871,6 +871,7 @@ dependencies = [
 name = "simple-gh"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "axum",
  "byte-unit",
  "chrono",
