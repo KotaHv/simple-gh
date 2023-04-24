@@ -1,0 +1,10 @@
+cache
+target
+*.md
+.env
+.gitignore
+Dockerfile
+.dockerignore
+.vscode
+Dockerfile*
+examples
