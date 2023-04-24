@@ -1,11 +1,14 @@
-use std::time::Duration;
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use axum::http::{header, Request, Response};
-use tower_http::{
-    classify::{ClassifiedResponse, ClassifyResponse, NeverClassifyEos, SharedClassifier},
-    trace::{MakeSpan, OnResponse, TraceLayer},
-};
-use tracing::Span;
+use futures_util::ready;
+use pin_project::pin_project;
+use tokio::time::Instant;
+use tower::{Layer, Service};
 use tracing_subscriber::fmt::{self, time};
 use yansi::Paint;
 
@@ -16,89 +19,102 @@ pub fn init() {
     fmt::fmt()
         .with_timer(time::LocalTime::rfc_3339())
         .with_max_level(CONFIG.log.level)
-        .pretty()
         .init();
 }
 
-pub fn layer(
-) -> TraceLayer<SharedClassifier<MyClassifier>, MyMakeSpan, (), MyOnResponse, (), (), ()> {
-    TraceLayer::new(SharedClassifier::new(MyClassifier))
-        .make_span_with(MyMakeSpan)
-        .on_response(MyOnResponse)
-        .make_span_with(MyMakeSpan)
-        .on_request(())
-        .on_response(MyOnResponse)
-        .on_body_chunk(())
-        .on_eos(())
-        .on_failure(())
-}
+#[derive(Clone)]
+pub struct TraceLayer;
 
-#[derive(Copy, Clone)]
-pub struct MyClassifier;
+impl<S> Layer<S> for TraceLayer {
+    type Service = TraceMiddleware<S>;
 
-impl ClassifyResponse for MyClassifier {
-    type FailureClass = String;
-    type ClassifyEos = NeverClassifyEos<Self::FailureClass>;
-
-    fn classify_response<B>(
-        self,
-        res: &Response<B>,
-    ) -> ClassifiedResponse<Self::FailureClass, Self::ClassifyEos> {
-        if res.status().is_success() {
-            ClassifiedResponse::Ready(Ok(()))
-        } else {
-            ClassifiedResponse::Ready(Err(res.status().to_string()))
-        }
-    }
-
-    fn classify_error<E>(self, error: &E) -> Self::FailureClass
-    where
-        E: std::fmt::Display + 'static,
-    {
-        error.to_string()
+    fn layer(&self, inner: S) -> Self::Service {
+        TraceMiddleware { inner }
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct MyMakeSpan;
+#[derive(Clone)]
+pub struct TraceMiddleware<S> {
+    inner: S,
+}
 
-impl<B> MakeSpan<B> for MyMakeSpan {
-    fn make_span(&mut self, request: &Request<B>) -> Span {
-        let path = request.uri().path();
-        if path == "/alive" {
-            return trace_span!("request");
-        }
-        let path = match request.uri().query() {
-            Some(query) => format!("{}?{}", path, query),
-            None => path.to_string(),
-        };
-        let ip = Paint::cyan(util::get_ip(request));
-        let method = Paint::green(request.method());
-        let path = Paint::blue(path);
-        let headers = request.headers();
+impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for TraceMiddleware<S>
+where
+    S: Service<Request<ReqBody>, Response = Response<ResBody>>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = TraceFuture<S::Future>;
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx).map_err(Into::into)
+    }
+    fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
+        let start = Instant::now();
+        let ip = util::get_ip(&req);
+        let method = req.method().to_string();
+        let path = req.uri().path().to_string();
+        let headers = req.headers();
         let referer = util::get_header(&headers, header::REFERER).unwrap_or("-".to_string());
         let ua = util::get_ua(&headers);
-        info_span!("request", ip = ?ip, method = ?method, path=?path, referer = referer, user_agent=ua)
+        let response_future = self.inner.call(req);
+        TraceFuture {
+            response_future,
+            ip,
+            method,
+            path,
+            referer,
+            start,
+            ua,
+        }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct MyOnResponse;
+#[pin_project]
+pub struct TraceFuture<F> {
+    #[pin]
+    response_future: F,
+    start: Instant,
+    ip: String,
+    method: String,
+    path: String,
+    referer: String,
+    ua: String,
+}
 
-impl<B> OnResponse<B> for MyOnResponse {
-    fn on_response(self, res: &Response<B>, latency: Duration, span: &Span) {
-        if !span.has_field("ip") {
-            return;
+impl<F, ResBody, E> Future for TraceFuture<F>
+where
+    F: Future<Output = Result<Response<ResBody>, E>>,
+{
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        let res = ready!(this.response_future.poll(cx)?);
+        if this.path.as_str() == "/alive" {
+            return Poll::Ready(Ok(res));
         }
-
-        let latency = Paint::white(latency);
-        let status = format!("status={}", res.status());
         if res.status().is_success() {
-            let status = Paint::yellow(status);
-            info!("{status} latency={latency:?}");
+            info!(
+                "{ip} {method} {path} => {status} \"{referer}\" {elapsed:?}",
+                ip = Paint::cyan(this.ip),
+                method = Paint::green(this.method),
+                path = Paint::blue(this.path),
+                status = Paint::yellow(res.status()),
+                referer = this.referer,
+                elapsed = this.start.elapsed()
+            );
         } else {
-            let status = Paint::red(status);
-            warn!("{status} latency={latency:?}");
+            warn!(
+                "{ip} {method} {path} => {status} \"{referer}\" [{ua}] {elapsed:?}",
+                ip = Paint::red(this.ip).bold(),
+                method = Paint::green(this.method),
+                path = Paint::red(this.path).underline(),
+                status = Paint::red(res.status()),
+                referer = this.referer,
+                elapsed = this.start.elapsed(),
+                ua = Paint::magenta(this.ua),
+            )
         }
+        Poll::Ready(Ok(res))
     }
 }

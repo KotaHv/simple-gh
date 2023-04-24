@@ -38,7 +38,7 @@ async fn main() -> std::io::Result<()> {
         .with_state(task_jh_state)
         .nest("/gh", gh::routes())
         .with_state(client)
-        .layer(trace::layer());
+        .layer(trace::TraceLayer);
 
     let server = axum::Server::bind(&config::CONFIG.addr)
         .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>());
