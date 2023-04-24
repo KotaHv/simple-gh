@@ -26,7 +26,6 @@ serde_urlencoded = "0.7"
 pin-project = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["local-time"] }
-tower-http = { version = "0.1", features = ["trace"] }
 
 [profile.release]
 lto = true

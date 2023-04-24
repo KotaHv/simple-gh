@@ -993,7 +993,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tower",
- "tower-http",
  "tracing",
  "tracing-subscriber",
  "yansi",
@@ -1192,23 +1191,6 @@ dependencies = [
  "slab",
  "tokio",
  "tokio-util",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "tower-http"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81eca72647e58054bbfa41e6f297c23436f1c60aff6e5eb38455a0f9ca420bb5"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-util",
- "http",
- "http-body",
- "pin-project",
  "tower-layer",
  "tower-service",
  "tracing",
