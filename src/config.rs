@@ -8,13 +8,14 @@ use figment::{providers::Env, Figment};
 use once_cell::sync::Lazy;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
+use tracing::Level;
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| init_config());
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct Log {
-    #[serde(default = "Log::level")]
-    pub level: String,
+    #[serde(default = "Log::level", with = "level_format")]
+    pub level: Level,
     #[serde(default = "Log::style")]
     pub style: String,
 }
@@ -29,8 +30,8 @@ impl Default for Log {
 }
 
 impl Log {
-    fn level() -> String {
-        "INFO".to_string()
+    fn level() -> Level {
+        Level::INFO
     }
 
     fn style() -> String {
@@ -135,6 +136,29 @@ where
         }
     }
     deserializer.deserialize_any(SizeVisitor)
+}
+
+mod level_format {
+    use std::str::FromStr;
+
+    use serde::{self, Deserialize, Deserializer, Serializer};
+    use tracing::Level;
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Level, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Level::from_str(&s).map_err(serde::de::Error::custom)
+    }
+
+    pub fn serialize<S>(level: &Level, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = level.to_string();
+        serializer.serialize_str(&s)
+    }
 }
 
 pub fn init_config() -> Config {

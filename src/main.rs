@@ -14,13 +14,13 @@ use tokio::signal::{
 use tokio::task::AbortHandle;
 
 #[macro_use]
-extern crate log;
+extern crate tracing;
 
 mod config;
 mod error;
 mod gh;
-mod logger;
 mod task;
+mod trace;
 mod util;
 
 use crate::error::CustomError;
@@ -28,7 +28,7 @@ use crate::error::CustomError;
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     launch_info();
-    logger::init_logger();
+    trace::init();
     info!("listening on http://{}", config::CONFIG.addr);
     let client = Arc::new(reqwest::Client::new());
     let (task_jh, task_cancel) = task::init_background_task();
@@ -38,7 +38,7 @@ async fn main() -> std::io::Result<()> {
         .with_state(task_jh_state)
         .nest("/gh", gh::routes())
         .with_state(client)
-        .layer(logger::LoggerLayer);
+        .layer(trace::layer());
 
     let server = axum::Server::bind(&config::CONFIG.addr)
         .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>());
