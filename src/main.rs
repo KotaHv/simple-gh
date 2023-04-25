@@ -23,7 +23,8 @@ mod task;
 mod trace;
 mod util;
 
-use crate::error::CustomError;
+pub use config::CONFIG;
+pub use error::CustomError;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {

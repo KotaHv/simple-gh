@@ -18,8 +18,8 @@ use tracing_subscriber::{
 };
 use yansi::Paint;
 
-use crate::config::CONFIG;
 use crate::util;
+use crate::CONFIG;
 
 pub fn init() {
     let format = fmt::layer().with_timer(LocalTime);

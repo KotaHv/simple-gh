@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use reqwest::Client;
 
-use crate::error::CustomError;
+use crate::CustomError;
 
 type RequestOutput = Result<reqwest::Response, CustomError>;
 

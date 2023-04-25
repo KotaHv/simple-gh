@@ -12,8 +12,8 @@ use tokio::fs;
 use super::extract::GHPath;
 use super::reqwest::Request;
 use super::CONFIG;
-use crate::error::CustomError;
 use crate::util;
+use crate::CustomError;
 
 pub async fn get_gh(
     GHPath(gh_path): GHPath,

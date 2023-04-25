@@ -7,8 +7,8 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::config::CONFIG;
 use crate::util;
+use crate::CONFIG;
 
 pub fn init_background_task() -> (task::JoinHandle<()>, CancellationToken) {
     let cancel = CancellationToken::new();

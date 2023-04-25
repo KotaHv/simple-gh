@@ -7,7 +7,7 @@ use ::reqwest::Client;
 use axum::{routing::get, Router};
 use std::sync::Arc;
 
-use crate::config::CONFIG;
+use crate::CONFIG;
 use middleware::TokenLayer;
 
 pub fn routes() -> Router<Arc<Client>> {
