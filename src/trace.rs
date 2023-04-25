@@ -103,29 +103,34 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
         let res = ready!(this.response_future.poll(cx)?);
-        if this.path.as_str() == "/alive" {
-            return Poll::Ready(Ok(res));
-        }
         if res.status().is_success() {
-            info!(
-                "{ip} {method} {path} => {status} \"{referer}\" {elapsed:?}",
-                ip = Paint::cyan(this.ip),
-                method = Paint::green(this.method),
-                path = Paint::blue(this.path),
-                status = Paint::yellow(res.status()),
-                referer = this.referer,
-                elapsed = this.start.elapsed()
-            );
+            match this.path.as_str() {
+                "/alive" => debug!(
+                    ip = ?Paint::cyan(this.ip),
+                    method = ?Paint::green(this.method),
+                    path = ?Paint::blue(this.path),
+                    status = ?Paint::yellow(res.status().to_string()),
+                    referer = this.referer,
+                    elapsed = ?this.start.elapsed()
+                ),
+                _ => info!(
+                    ip = ?Paint::cyan(this.ip),
+                    method = ?Paint::green(this.method),
+                    path = ?Paint::blue(this.path),
+                    status = ?Paint::yellow(res.status().to_string()),
+                    referer = this.referer,
+                    elapsed = ?this.start.elapsed()
+                ),
+            }
         } else {
             warn!(
-                "{ip} {method} {path} => {status} \"{referer}\" [{ua}] {elapsed:?}",
-                ip = Paint::red(this.ip).bold(),
-                method = Paint::green(this.method),
-                path = Paint::red(this.path).underline(),
-                status = Paint::red(res.status()),
+                ip = ?Paint::red(this.ip).bold(),
+                method = ?Paint::green(this.method),
+                path = ?Paint::red(this.path).underline(),
+                status = ?Paint::red(res.status().to_string()),
                 referer = this.referer,
-                elapsed = this.start.elapsed(),
-                ua = Paint::magenta(this.ua),
+                "user-agent" = ?Paint::magenta(this.ua),
+                elapsed = ?this.start.elapsed(),
             )
         }
         Poll::Ready(Ok(res))
