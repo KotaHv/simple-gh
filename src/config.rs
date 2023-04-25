@@ -8,15 +8,13 @@ use figment::{providers::Env, Figment};
 use once_cell::sync::Lazy;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
-use tracing::Level;
-use tracing_subscriber::EnvFilter;
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| init_config());
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct Log {
-    #[serde(default = "Log::level", with = "level_format")]
-    pub level: EnvFilter,
+    #[serde(default = "Log::level", deserialize_with = "level_format::deserialize")]
+    pub level: String,
     #[serde(default = "Log::style")]
     pub style: String,
 }
@@ -31,11 +29,8 @@ impl Default for Log {
 }
 
 impl Log {
-    fn level() -> EnvFilter {
-        EnvFilter::builder()
-            .with_default_directive(Level::WARN.into())
-            .parse("simple=info")
-            .unwrap()
+    fn level() -> String {
+        "simple=info".to_string()
     }
 
     fn style() -> String {
@@ -144,27 +139,18 @@ where
 
 mod level_format {
 
-    use serde::{self, Deserialize, Deserializer, Serializer};
-    use tracing::Level;
-    use tracing_subscriber::EnvFilter;
+    use serde::{self, de::Error, Deserialize, Deserializer};
+    use tracing_subscriber::filter::Directive;
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<EnvFilter, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<String, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        EnvFilter::builder()
-            .with_default_directive(Level::WARN.into())
-            .parse(s)
-            .map_err(serde::de::Error::custom)
-    }
-
-    pub fn serialize<S>(level: &EnvFilter, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let s = level.to_string();
-        serializer.serialize_str(&s)
+        match s.parse::<Directive>() {
+            Ok(_) => Ok(s),
+            Err(e) => Err(Error::custom(e)),
+        }
     }
 }
 
