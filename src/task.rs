@@ -15,7 +15,7 @@ pub fn init_background_task() -> (task::JoinHandle<()>, CancellationToken) {
 }
 
 async fn background_task(stop_signal: CancellationToken) {
-    info!(target:"BackgroundTask","Starting Background Task");
+    info!("Starting Background Task");
     let cache_time = chrono::Duration::seconds(CONFIG.cache.expiry as i64);
     loop {
         let mut entries = match read_dir(&CONFIG.cache.path).await {
@@ -43,8 +43,9 @@ async fn background_task(stop_signal: CancellationToken) {
                     let create_date = util::create_date(&metadata);
                     let duration = chrono::Utc::now() - create_date;
                     if duration > cache_time {
-                        warn!(target:"BackGroundTask",
-                            "{:?} cache has expired, {duration:?} > {cache_time:?}",entry.file_name()
+                        warn!(
+                            "{:?} cache has expired, {duration:?} > {cache_time:?}",
+                            entry.file_name()
                         );
                         util::remove_file(&filepath).await;
                         continue;
