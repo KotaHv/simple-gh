@@ -967,7 +967,7 @@ dependencies = [
 
 [[package]]
 name = "simple-gh"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "async-trait",
  "axum",
