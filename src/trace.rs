@@ -5,6 +5,7 @@ use std::{
 };
 
 use axum::http::{header, Request, Response};
+use chrono::{Local, SecondsFormat};
 use futures_util::ready;
 use pin_project::pin_project;
 use tokio::time::Instant;
@@ -17,9 +18,21 @@ use crate::util;
 
 pub fn init() {
     fmt::fmt()
-        .with_timer(time::LocalTime::rfc_3339())
+        .with_timer(LocalTime)
         .with_max_level(CONFIG.log.level)
         .init();
+}
+
+struct LocalTime;
+
+impl time::FormatTime for LocalTime {
+    fn format_time(&self, w: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
+        write!(
+            w,
+            "{}",
+            Local::now().to_rfc3339_opts(SecondsFormat::Millis, false)
+        )
+    }
 }
 
 #[derive(Clone)]
