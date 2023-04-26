@@ -5,7 +5,6 @@ extern crate rocket;
 
 mod config;
 mod error;
-mod fairing;
 mod gh;
 mod logger;
 mod task;
@@ -29,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .mount("/gh", gh::routes())
         .manage(client)
         .manage(task_jh_state)
-        .attach(fairing::Logging())
+        .attach(logger::Logging())
         .launch()
         .await?;
     warn!("simple-gh process exited!");

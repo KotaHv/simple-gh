@@ -1,7 +1,10 @@
 use std::{ffi::OsStr, fs::Metadata, path::PathBuf, str, str::FromStr};
 
 use chrono::{DateTime, Utc};
-use rocket::{http::ContentType, tokio, Request};
+use rocket::{
+    http::{hyper::header, ContentType, HeaderMap},
+    tokio, Request,
+};
 
 pub fn content_type(ct: &str) -> ContentType {
     ContentType::from_str(ct).unwrap_or(ContentType::Bytes)
@@ -31,18 +34,33 @@ pub async fn content_type_typepath(typepath: &PathBuf) -> ContentType {
 }
 
 pub fn get_ip(request: &Request) -> String {
-    if let Some(ip) = request.headers().get_one("X-Forwarded-For") {
+    let headers = request.headers();
+    if let Some(ip) = get_header(headers, "X-Forwarded-For") {
         if let Some(ip) = ip.split_once(",") {
-            ip.0.to_string()
-        } else {
-            ip.to_string()
+            return ip.0.to_string();
         }
-    } else {
-        if let Some(ip) = request.client_ip() {
-            ip.to_string()
-        } else {
-            "Unknown".to_string()
-        }
+        return ip;
+    }
+    if let Some(ip) = get_header(headers, "X-Real-IP") {
+        return ip;
+    }
+    if let Some(ip) = request.client_ip() {
+        return ip.to_string();
+    }
+    "-".to_string()
+}
+
+pub fn get_header(headers: &HeaderMap, key: &str) -> Option<String> {
+    if let Some(header) = headers.get_one(key) {
+        return Some(header.to_string());
+    }
+    None
+}
+
+pub fn get_ua(headers: &HeaderMap) -> String {
+    match get_header(headers, header::USER_AGENT.as_str()) {
+        Some(ua) => ua,
+        None => "-".to_string(),
     }
 }
 
