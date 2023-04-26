@@ -23,20 +23,29 @@ impl Fairing for Logging {
     }
 
     async fn on_liftoff(&self, rocket: &Rocket<Orbit>) {
-        info!(target: "routes", "Routes loaded:");
+        info!("Routes loaded:");
         let mut routes: Vec<_> = rocket.routes().collect();
         routes.sort_by_key(|r| r.uri.path());
         for route in routes {
             if route.rank < 0 {
-                info!(target: "routes", "{:<6} {}", Paint::green(&route.method), Paint::blue(&route.uri));
+                info!(
+                    "{:<6} {}",
+                    Paint::green(&route.method),
+                    Paint::blue(&route.uri)
+                );
             } else {
-                info!(target: "routes", "{:<6} {} [{}]", Paint::green(&route.method), Paint::blue(&route.uri), Paint::cyan(&route.rank));
+                info!(
+                    "{:<6} {} [{}]",
+                    Paint::green(&route.method),
+                    Paint::blue(&route.uri),
+                    Paint::cyan(&route.rank)
+                );
             }
         }
 
         let config = rocket.config();
         let addr = format!("http://{}:{}", &config.address, &config.port);
-        info!(target: "start", "Rocket has launched from {}", Paint::blue(addr));
+        info!("Rocket has launched from {}", Paint::blue(addr));
     }
 
     async fn on_request(&self, request: &mut Request<'_>, _data: &mut Data<'_>) {
@@ -71,9 +80,14 @@ impl Fairing for Logging {
         let status = Paint::yellow(response.status());
         if status.inner().code >= 400 {
             let ua = Paint::yellow(request.headers().get_one("user-agent").unwrap_or("Unknown"));
-            error!(target: "response", "{ip} {method} {uri_path_query} => {status} [{ua}] {duration_str}", ip=ip.fg(Color::Red).bold(), uri_path_query=uri_path_query.fg(Color::Red).underline(), status=status.fg(Color::Red).dimmed());
+            error!(
+                "{ip} {method} {uri_path_query} => {status} [{ua}] {duration_str}",
+                ip = ip.fg(Color::Red).bold(),
+                uri_path_query = uri_path_query.fg(Color::Red).underline(),
+                status = status.fg(Color::Red).dimmed()
+            );
         } else {
-            info!(target: "response", "{ip} {method} {uri_path_query} => {status} {duration_str}");
+            info!("{ip} {method} {uri_path_query} => {status} {duration_str}");
         }
     }
 }
