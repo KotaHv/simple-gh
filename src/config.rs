@@ -13,7 +13,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| init_config());
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct Log {
-    #[serde(default = "Log::level", deserialize_with = "level_format::deserialize")]
+    #[serde(default = "Log::level")]
     pub level: String,
     #[serde(default = "Log::style")]
     pub style: String,
@@ -135,23 +135,6 @@ where
         }
     }
     deserializer.deserialize_any(SizeVisitor)
-}
-
-mod level_format {
-
-    use serde::{self, de::Error, Deserialize, Deserializer};
-    use tracing_subscriber::filter::Directive;
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<String, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        match s.parse::<Directive>() {
-            Ok(_) => Ok(s),
-            Err(e) => Err(Error::custom(e)),
-        }
-    }
 }
 
 pub fn init_config() -> Config {

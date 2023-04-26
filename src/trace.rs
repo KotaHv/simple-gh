@@ -10,11 +10,10 @@ use futures_util::ready;
 use pin_project::pin_project;
 use tokio::time::Instant;
 use tower::{Layer, Service};
-use tracing::Level;
 use tracing_subscriber::{
+    filter::Targets,
     fmt::{self, time},
     prelude::*,
-    EnvFilter,
 };
 use yansi::Paint;
 
@@ -23,10 +22,7 @@ use crate::CONFIG;
 
 pub fn init() {
     let format = fmt::layer().with_timer(LocalTime);
-    let filter = EnvFilter::builder()
-        .with_default_directive(Level::WARN.into())
-        .parse(&CONFIG.log.level)
-        .unwrap();
+    let filter: Targets = CONFIG.log.level.as_str().parse().unwrap();
     tracing_subscriber::registry()
         .with(format)
         .with(filter)
