@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use axum::{
-    body::Full,
     extract::State,
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{IntoResponse, Response},
 };
 use reqwest::Client;
@@ -14,6 +13,23 @@ use super::reqwest::Request;
 use super::CONFIG;
 use crate::util;
 use crate::CustomError;
+
+struct GHResponse<T> {
+    body: T,
+    ctype: String,
+}
+
+impl<T> IntoResponse for GHResponse<T>
+where
+    T: IntoResponse,
+{
+    fn into_response(self) -> Response {
+        let mut res = self.body.into_response();
+        res.headers_mut()
+            .insert(header::CONTENT_TYPE, self.ctype.parse().unwrap());
+        res
+    }
+}
 
 pub async fn get_gh(
     GHPath(gh_path): GHPath,
@@ -26,12 +42,11 @@ pub async fn get_gh(
         Ok(content) => {
             debug!("{filepath:?} is exists");
             let content_type = util::content_type_typepath(&typepath).await;
-            return Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("content-type", content_type)
-                .body(Full::from(content))
-                .unwrap()
-                .into_response());
+            return Ok(GHResponse {
+                body: content,
+                ctype: content_type,
+            }
+            .into_response());
         }
         Err(e) => {
             if e.kind() != std::io::ErrorKind::NotFound {
@@ -71,11 +86,10 @@ pub async fn get_gh(
             fs::write(&typepath, &content_type).await.ok();
         }
     }
-    // (status_code, [("content-type", content_type)], content).into_response()
-    Ok(Response::builder()
-        .status(status_code)
-        .header("content-type", content_type)
-        .body(Full::from(content))
-        .unwrap()
-        .into_response())
+
+    Ok(GHResponse {
+        body: content,
+        ctype: content_type.to_string(),
+    }
+    .into_response())
 }
