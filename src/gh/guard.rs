@@ -3,7 +3,7 @@ use rocket::{
         uri::{error::PathError as RPathError, fmt::Path, Segments},
         Status,
     },
-    request::{self, FromRequest, FromSegments},
+    request::{FromRequest, FromSegments, Outcome},
     Request,
 };
 
@@ -20,7 +20,7 @@ pub enum PathError {
 impl<'r> FromSegments<'r> for PathGuard {
     type Error = PathError;
     fn from_segments(segments: Segments<'r, Path>) -> Result<Self, Self::Error> {
-        if segments.len() == 0 {
+        if segments.len() < 3 {
             return Err(PathError::BadLen);
         }
         match segments.to_path_buf(false) {
@@ -40,25 +40,17 @@ pub enum TokenError {
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for TokenGuard {
     type Error = TokenError;
-    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let token = CONFIG.token.as_ref();
-        if token.is_none() {
-            debug!("Token not set");
-            return request::Outcome::Success(TokenGuard);
-        }
-        if let Some(token_result) = request.query_value::<String>("token") {
-            match token_result {
-                Ok(query_token) => {
-                    if token == Some(&query_token) {
-                        return request::Outcome::Success(TokenGuard);
-                    }
+        if let Some(token) = token {
+            if let Some(Ok(token_query)) = request.query_value::<String>("token") {
+                if token != &token_query {
+                    return Outcome::Failure((Status::NotFound, TokenError::Invalid));
                 }
-                Err(e) => {
-                    error!("{e}");
-                }
+            } else {
+                return Outcome::Failure((Status::NotFound, TokenError::Missing));
             }
-            return request::Outcome::Failure((Status::NotFound, TokenError::Invalid));
         }
-        request::Outcome::Failure((Status::NotFound, TokenError::Missing))
+        Outcome::Success(TokenGuard)
     }
 }
