@@ -1,101 +1,86 @@
-use std::io::{self, ErrorKind};
-use std::path::PathBuf;
-use std::thread;
+use std::io::ErrorKind;
 
 use rocket::tokio::{
-    self,
     fs::{create_dir_all, read_dir, DirEntry},
+    select, task,
+    time::{self, sleep},
 };
+use tokio_util::sync::CancellationToken;
 
-use crate::config::Config;
+use crate::config::CONFIG;
 use crate::util;
 
-pub async fn background_task(config: Config) -> thread::JoinHandle<()> {
-    info!(target:"BackgroundTask","Starting Background Task");
-    let cache_time = chrono::Duration::seconds(config.cache_time as i64);
-    let cache_path = config.cache_path.clone();
-    let max_cache = config.max_cache;
+pub fn init_background_task() -> (task::JoinHandle<()>, CancellationToken) {
+    let cancel = CancellationToken::new();
 
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    thread::Builder::new()
-        .name("job-scheduler".to_string())
-        .spawn(move || {
-            use job_scheduler_ng::{Job, JobScheduler};
-            let _runtime_guard = runtime.enter();
-
-            let mut sched = JobScheduler::new();
-
-            sched.add(Job::new("*/10 * * * * *".parse().unwrap(), || {
-                runtime.spawn(handle_background_task(
-                    cache_time,
-                    cache_path.clone(),
-                    max_cache,
-                ));
-            }));
-
-            loop {
-                sched.tick();
-                runtime.block_on(async move {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await
-                });
-            }
-        })
-        .expect("Error spawning job scheduler thread")
+    (task::spawn(background_task(cancel.clone())), cancel)
 }
 
-async fn handle_background_task(
-    cache_time: chrono::Duration,
-    cache_path: PathBuf,
-    max_cache: u64,
-) -> io::Result<()> {
-    let mut entries = match read_dir(&cache_path).await {
-        Ok(entries) => entries,
-        Err(e) => {
-            error!("{:?}:{e}", e.kind());
-            if e.kind() == ErrorKind::NotFound {
-                error!("mkdir: {:?}", cache_path);
-                create_dir_all(&cache_path).await.ok();
-            }
-            return Err(e);
-        }
-    };
-    let mut cache_size = 0;
-    let mut files: Vec<(DirEntry, chrono::DateTime<chrono::Utc>, u64)> = Vec::new();
-    while let Some(entry) = entries.next_entry().await? {
-        let metadata = entry.metadata().await?;
-        if metadata.is_file() {
-            let filepath = entry.path();
-            if filepath.extension().unwrap() == "type" {
+async fn background_task(stop_signal: CancellationToken) {
+    info!("Starting Background Task");
+    let cache_time = chrono::Duration::seconds(CONFIG.cache.expiry as i64);
+    loop {
+        let mut entries = match read_dir(&CONFIG.cache.path).await {
+            Ok(entries) => entries,
+            Err(e) => {
+                error!("{:?}:{e}", e.kind());
+                if e.kind() == ErrorKind::NotFound {
+                    error!("mkdir: {:?}", CONFIG.cache.path);
+                    create_dir_all(&CONFIG.cache.path).await.ok();
+                }
                 continue;
             }
-            let create_date = util::create_date(&metadata);
-            let duration = chrono::Utc::now() - create_date;
-            if duration > cache_time {
-                warn!(target:"BackGroundTask",
-                    "{:?} cache has expired, {duration:?} > {cache_time:?}",entry.file_name()
-                );
-                util::remove_file(&filepath).await;
+        };
+        let mut cache_size = 0;
+        let mut files: Vec<(DirEntry, chrono::DateTime<chrono::Utc>, u64)> = Vec::new();
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            if let Ok(metadata) = entry.metadata().await {
+                if metadata.is_file() {
+                    let filepath = entry.path();
+                    if let Some(extension) = filepath.extension() {
+                        if extension == "type" {
+                            continue;
+                        }
+                    }
+                    let create_date = util::create_date(&metadata);
+                    let duration = chrono::Utc::now() - create_date;
+                    if duration > cache_time {
+                        warn!(
+                            "{:?} cache has expired, {duration:?} > {cache_time:?}",
+                            entry.file_name()
+                        );
+                        util::remove_file(&filepath).await;
+                        continue;
+                    }
+                    let file_size = metadata.len();
+                    cache_size += file_size;
+                    files.push((entry, create_date, file_size));
+                }
+            }
+        }
+        if cache_size > CONFIG.cache.max {
+            warn!("Exceed the maximum cache");
+            debug!("{files:?}");
+            files.sort_by(|a, b| a.1.cmp(&b.1));
+            debug!("{files:?}");
+            for (file, _, size) in files.iter() {
+                warn!("delete file {:?}", file.file_name());
+                util::remove_file(&file.path()).await;
+                cache_size -= size;
+                if cache_size <= CONFIG.cache.max {
+                    break;
+                }
+            }
+        }
+        select! {
+            _ = sleep(time::Duration::from_secs(10)) => {
                 continue;
             }
-            let file_size = metadata.len();
-            cache_size += file_size;
-            files.push((entry, create_date, file_size));
-        }
-    }
-    if cache_size > max_cache {
-        warn!("Exceed the maximum cache");
-        debug!("{files:?}");
-        files.sort_by(|a, b| a.1.cmp(&b.1));
-        debug!("{files:?}");
-        for (file, _, size) in files.iter() {
-            warn!("delete file {:?}", file.file_name());
-            util::remove_file(&file.path()).await;
-            cache_size -= size;
-            if cache_size <= max_cache {
+
+            _ = stop_signal.cancelled() => {
+                info!("gracefully shutting down background task");
                 break;
             }
-        }
+        };
     }
-
-    Ok(())
 }
