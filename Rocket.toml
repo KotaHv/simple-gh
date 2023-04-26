@@ -1,7 +1,0 @@
-[debug]
-address = "0.0.0.0"
-port = 1234
-
-[release]
-address = "0.0.0.0"
-port = 80

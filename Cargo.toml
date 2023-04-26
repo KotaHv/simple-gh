@@ -6,19 +6,23 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rocket = { version = "0.5.0-rc.2", default-features = false }
-reqwest = { version = "0.11.12", default-features = false, features = ["rustls-tls"] }
-chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
-log = "0.4.17"
-env_logger = "0.9.1"
+rocket = { version = "0.5.0-rc.3", default-features = false }
+reqwest = { version = "0.11", default-features = false, features = [
+    "rustls-tls",
+] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+log = "0.4"
+env_logger = { version = "0.10", default-features = false }
 bytes = "1"
-byte-unit = { version = "4.0.14", default-features = false }
-dotenvy = "0.15.5"
-job_scheduler_ng = "*"
+byte-unit = { version = "4.0", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+once_cell = "1.17"
+tokio-util = "0.7"
+
 
 [profile.release]
 lto = true
-opt-level = 3
-strip = true  # Automatically strip symbols from the binary.
+opt-level = "z"
+strip = true      # Automatically strip symbols from the binary.
 codegen-units = 1
 panic = "abort"
