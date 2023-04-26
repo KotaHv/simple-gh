@@ -1,3 +1,4 @@
+use chrono::{Local, SecondsFormat};
 use rocket::{http::Status, tokio::task::AbortHandle, State};
 
 #[macro_use]
@@ -44,7 +45,9 @@ fn alive(task_jh: &State<AbortHandle>) -> Result<String, Status> {
         return Err(Status::InternalServerError);
     }
     debug!("background task success");
-    Ok(chrono::Local::now().to_string())
+    Ok(Local::now()
+        .to_rfc3339_opts(SecondsFormat::Millis, false)
+        .to_string())
 }
 
 fn launch_info() {
