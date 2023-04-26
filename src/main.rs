@@ -1,49 +1,45 @@
-use std::io::Write;
-
-use config::init_config;
-use dotenvy::dotenv;
-use log::LevelFilter;
-use rocket::{http::Status, State};
+use rocket::{http::Status, tokio::task::AbortHandle, State};
 
 #[macro_use]
 extern crate rocket;
-#[macro_use]
-extern crate log;
 
 mod config;
+mod error;
 mod fairing;
 mod gh;
+mod logger;
 mod task;
 mod util;
 
-use util::{bold_target, colored_level};
+pub use config::CONFIG;
+pub use error::CustomError;
 
 #[rocket::main]
-async fn main() -> Result<(), rocket::Error> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     launch_info();
-    dotenv().ok();
-    init_logger();
-    let config = init_config();
-    let task_jh = task::background_task(config.clone()).await;
-    let _ = rocket::build()
+    logger::init_logger();
+    let mut config = rocket::Config::from(rocket::Config::figment());
+    config.address = CONFIG.addr.ip();
+    config.port = CONFIG.addr.port();
+    let client = reqwest::Client::new();
+    let (task_jh, task_cancel) = task::init_background_task();
+    let task_jh_state = task_jh.abort_handle();
+    rocket::custom(config)
         .mount("/", routes![alive])
         .mount("/gh", gh::routes())
-        .manage(create_client())
-        .manage(config)
-        .manage(task_jh)
+        .manage(client)
+        .manage(task_jh_state)
         .attach(fairing::Logging())
         .launch()
-        .await;
+        .await?;
     warn!("simple-gh process exited!");
+    task_cancel.cancel();
+    task_jh.await?;
     Ok(())
 }
 
-fn create_client() -> reqwest::Client {
-    reqwest::Client::new()
-}
-
 #[get("/alive")]
-fn alive(task_jh: &State<std::thread::JoinHandle<()>>) -> Result<String, Status> {
+fn alive(task_jh: &State<AbortHandle>) -> Result<String, Status> {
     if task_jh.is_finished() {
         error!("background task failed");
         return Err(Status::InternalServerError);
@@ -56,27 +52,4 @@ fn launch_info() {
     println!();
     println!("=================== Starting Simple-Gh ===================");
     println!();
-}
-
-fn init_logger() {
-    let env = env_logger::Env::default()
-        .filter_or("SIMPLE_GH_LOG_LEVEL", LevelFilter::Info.as_str())
-        .write_style_or("SIMPLE_GH_LOG_STYLE", "auto");
-    env_logger::Builder::from_env(env)
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "[{}][{}][{}]: {}",
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S.%3f"),
-                bold_target(record.target()),
-                colored_level(record.level()),
-                record.args()
-            )
-        })
-        .filter(Some("rocket::launch"), LevelFilter::Warn)
-        .filter(Some("_"), LevelFilter::Error)
-        .filter(Some("rocket::shield::shield"), LevelFilter::Warn)
-        .filter(Some("rocket::server"), LevelFilter::Warn)
-        .filter(Some("reqwest::connect"), LevelFilter::Warn)
-        .init();
 }
