@@ -22,7 +22,17 @@ use crate::CONFIG;
 
 pub fn init() {
     let format = fmt::layer().with_timer(LocalTime);
-    let filter: Targets = CONFIG.log.level.as_str().parse().unwrap();
+
+    let level = CONFIG.log.level.as_str();
+    let filter: Targets = match level.parse() {
+        Ok(f) => f,
+        Err(e) => {
+            let err = format!("string {} did not parse successfully: {}", level, e);
+            let err = Paint::red(err).bold();
+            panic!("{}", err);
+        }
+    };
+
     tracing_subscriber::registry()
         .with(format)
         .with(filter)
