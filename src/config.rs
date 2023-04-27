@@ -9,6 +9,8 @@ use once_cell::sync::Lazy;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
 
+const PREFIX: &'static str = "SIMPLE_GH_";
+
 pub static CONFIG: Lazy<Config> = Lazy::new(|| init_config());
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -139,8 +141,8 @@ where
 
 pub fn init_config() -> Config {
     let config = Figment::from(Serialized::defaults(Config::default()))
-        .merge(Env::prefixed("SIMPLE_GH_"))
-        .merge(Env::prefixed("SIMPLE_GH_").split("_"))
+        .merge(Env::prefixed(PREFIX))
+        .merge(Env::prefixed(PREFIX).split("_"))
         .extract();
     match config {
         Ok(config) => {
