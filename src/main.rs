@@ -86,6 +86,9 @@ async fn alive<'a>(State(task): State<Arc<AbortHandle>>) -> Result<Response, Cus
 
 fn launch_info() {
     println!();
-    println!("=================== Starting Simple-Gh ===================");
+    println!(
+        "=================== Starting Simple-Gh {} ===================",
+        env!("CARGO_PKG_VERSION")
+    );
     println!();
 }
