@@ -30,7 +30,7 @@ impl Default for Log {
 
 impl Log {
     fn level() -> String {
-        "simple=info".to_string()
+        "simple=info,rocket=info,rocket::server=warn".to_string()
     }
 
     fn style() -> String {

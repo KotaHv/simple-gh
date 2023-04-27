@@ -1,13 +1,17 @@
+use std::io::{self, Write};
+
 use chrono::Local;
 use chrono::SecondsFormat;
+use env_logger::fmt::Formatter;
 use env_logger::Builder;
 use log::Level;
+use log::Record;
 use rocket::{
     fairing::{Fairing, Info, Kind},
     http::hyper::header,
     tokio::time::Instant,
     yansi::Paint,
-    Data, Orbit, Request, Response, Rocket,
+    Data, Request, Response,
 };
 
 use crate::{
@@ -15,23 +19,19 @@ use crate::{
     CONFIG,
 };
 
-pub fn init_logger() {
+pub fn init() {
     let mut builder = Builder::new();
     builder
         .format(|buf, record| {
-            use std::io::Write;
             let target = record.target();
-            let level = match record.level() {
-                Level::Error => Paint::red("ERROR"),
-                Level::Warn => Paint::yellow("WARN"),
-                Level::Info => Paint::green("INFO"),
-                Level::Debug => Paint::blue("DEBUG"),
-                Level::Trace => Paint::magenta("TRACE"),
-            };
-            let target = Paint::new(target).bold();
+            if target.starts_with("rocket") {
+                return rocket_log(buf, record);
+            }
+            let target = Paint::default(target).bold();
+            let level = colored_level(record.level());
             writeln!(
                 buf,
-                " {} {} {} > {}",
+                "{} {} {} > {}",
                 Local::now().to_rfc3339_opts(SecondsFormat::Millis, false),
                 level,
                 target,
@@ -43,6 +43,63 @@ pub fn init_logger() {
         .init();
 }
 
+fn rocket_log(buf: &mut Formatter, record: &Record) -> io::Result<()> {
+    let target = record.target();
+    let indented: bool = target.ends_with('_');
+    if indented {
+        write!(buf, "   {} ", Paint::default(">>").bold())?
+    }
+    let level = record
+        .target()
+        .contains("rocket::launch")
+        .then(|| Level::Info)
+        .unwrap_or_else(|| record.level());
+    match level {
+        log::Level::Error if !indented => {
+            writeln!(
+                buf,
+                "{} {}",
+                Paint::red("Error:").bold(),
+                Paint::red(record.args()).wrap()
+            )
+        }
+        log::Level::Warn if !indented => {
+            writeln!(
+                buf,
+                "{} {}",
+                Paint::yellow("Warning:").bold(),
+                Paint::yellow(record.args()).wrap()
+            )
+        }
+        log::Level::Info => writeln!(buf, "{}", Paint::blue(record.args()).wrap()),
+        log::Level::Trace => writeln!(buf, "{}", Paint::magenta(record.args()).wrap()),
+        log::Level::Warn => writeln!(buf, "{}", Paint::yellow(record.args()).wrap()),
+        log::Level::Error => writeln!(buf, "{}", Paint::red(record.args()).wrap()),
+        log::Level::Debug => {
+            write!(buf, "\n{} ", Paint::blue("-->").bold())?;
+            if let Some(file) = record.file() {
+                write!(buf, "{}", Paint::blue(file))?;
+            }
+
+            if let Some(line) = record.line() {
+                writeln!(buf, ":{}", Paint::blue(line))?;
+            }
+
+            writeln!(buf, "\t{}", record.args())
+        }
+    }
+}
+
+fn colored_level(level: Level) -> Paint<&'static str> {
+    match level {
+        Level::Error => Paint::red("ERROR"),
+        Level::Warn => Paint::yellow("WARN"),
+        Level::Info => Paint::green("INFO"),
+        Level::Debug => Paint::blue("DEBUG"),
+        Level::Trace => Paint::magenta("TRACE"),
+    }
+}
+
 const LOGGING_ROUTE_DEBUG: [&str; 1] = ["/alive"];
 pub struct Logging();
 #[rocket::async_trait]
@@ -50,34 +107,8 @@ impl Fairing for Logging {
     fn info(&self) -> Info {
         Info {
             name: "Logging",
-            kind: Kind::Liftoff | Kind::Request | Kind::Response,
+            kind: Kind::Request | Kind::Response,
         }
-    }
-
-    async fn on_liftoff(&self, rocket: &Rocket<Orbit>) {
-        info!("Routes loaded:");
-        let mut routes: Vec<_> = rocket.routes().collect();
-        routes.sort_by_key(|r| r.uri.path());
-        for route in routes {
-            if route.rank < 0 {
-                info!(
-                    "{:<6} {}",
-                    Paint::green(&route.method),
-                    Paint::blue(&route.uri)
-                );
-            } else {
-                info!(
-                    "{:<6} {} [{}]",
-                    Paint::green(&route.method),
-                    Paint::blue(&route.uri),
-                    Paint::cyan(&route.rank)
-                );
-            }
-        }
-
-        let config = rocket.config();
-        let addr = format!("http://{}:{}", &config.address, &config.port);
-        info!("Rocket has launched from {}", Paint::blue(addr));
     }
 
     async fn on_request(&self, request: &mut Request<'_>, _data: &mut Data<'_>) {

@@ -3,6 +3,8 @@ use rocket::{http::Status, tokio::task::AbortHandle, State};
 
 #[macro_use]
 extern crate rocket;
+#[macro_use]
+extern crate log;
 
 mod config;
 mod error;
@@ -17,7 +19,7 @@ pub use error::CustomError;
 #[rocket::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     launch_info();
-    logger::init_logger();
+    logger::init();
     let mut config = rocket::Config::from(rocket::Config::figment());
     config.address = CONFIG.addr.ip();
     config.port = CONFIG.addr.port();
