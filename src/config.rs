@@ -1,31 +1,71 @@
-use std::fmt;
-use std::net::{IpAddr, Ipv4Addr};
-use std::path::PathBuf;
-use std::{net::SocketAddr, path::Path};
+use std::{
+    fmt,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::{Path, PathBuf},
+};
 
-use figment::providers::Serialized;
 use figment::{providers::Env, Figment};
+use is_terminal::IsTerminal;
 use once_cell::sync::Lazy;
-use serde::de::Visitor;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{de::Visitor, Deserialize, Deserializer};
 
 const PREFIX: &'static str = "SIMPLE_GH_";
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| init_config());
 
-#[derive(Deserialize, Debug, Serialize)]
+#[derive(Debug)]
+pub enum LogStyle {
+    Auto,
+    Always,
+    Never,
+}
+
+impl Default for LogStyle {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+impl LogStyle {
+    pub fn is_color(&self) -> bool {
+        match self {
+            LogStyle::Auto => std::io::stdout().is_terminal(),
+            LogStyle::Always => true,
+            LogStyle::Never => false,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for LogStyle {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?.to_lowercase();
+        match s.as_str() {
+            "auto" => Ok(LogStyle::Auto),
+            "always" => Ok(LogStyle::Always),
+            "never" => Ok(LogStyle::Never),
+            _ => Err(serde::de::Error::unknown_field(
+                &s,
+                &["auto", "always", "never"],
+            )),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(default)]
 pub struct Log {
-    #[serde(default = "Log::level")]
     pub level: String,
-    #[serde(default = "Log::style")]
-    pub style: String,
+    pub style: LogStyle,
 }
 
 impl Default for Log {
     fn default() -> Self {
         Log {
             level: Log::level(),
-            style: Log::style(),
+            style: LogStyle::default(),
         }
     }
 }
@@ -34,19 +74,14 @@ impl Log {
     fn level() -> String {
         "simple=info".to_string()
     }
-
-    fn style() -> String {
-        "always".to_string()
-    }
 }
 
-#[derive(Deserialize, Debug, Serialize)]
+#[derive(Deserialize, Debug)]
+#[serde(default)]
 pub struct Cache {
-    #[serde(default = "Cache::path")]
     pub path: PathBuf,
-    #[serde(default = "Cache::max", deserialize_with = "deserialize_with_size")]
+    #[serde(deserialize_with = "deserialize_with_size")]
     pub max: u64,
-    #[serde(default = "Cache::expiry")]
     pub expiry: u32,
 }
 
@@ -71,7 +106,7 @@ impl Cache {
     }
 }
 
-#[derive(Deserialize, Debug, Serialize)]
+#[derive(Deserialize, Debug)]
 pub struct Config {
     #[serde(deserialize_with = "deserialize_with_size")]
     pub file_max: u64,
@@ -140,10 +175,9 @@ where
 }
 
 pub fn init_config() -> Config {
-    let config = Figment::from(Serialized::defaults(Config::default()))
-        .merge(Env::prefixed(PREFIX))
+    let config = Figment::from(Env::prefixed(PREFIX))
         .merge(Env::prefixed(PREFIX).split("_"))
-        .extract();
+        .extract::<Config>();
     match config {
         Ok(config) => {
             println!("{:#?}", config);
