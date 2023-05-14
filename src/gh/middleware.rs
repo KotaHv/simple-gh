@@ -1,87 +1,52 @@
-use std::{
-    future::Future,
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::marker::PhantomData;
 
-use super::CONFIG;
-use axum::{
-    http::{Request, StatusCode},
-    response::{IntoResponse, Response},
-};
-use futures_util::ready;
-use pin_project::pin_project;
+use axum::http::{Request, Response, StatusCode};
 use serde::Deserialize;
-use tower::{Layer, Service};
+use tower_http::validate_request::ValidateRequest;
 
-#[derive(Clone)]
-pub struct TokenLayer;
-
-impl<S> Layer<S> for TokenLayer {
-    type Service = TokenMiddleware<S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        TokenMiddleware { inner }
-    }
-}
-
-#[derive(Clone)]
-pub struct TokenMiddleware<S> {
-    inner: S,
+pub struct Token<ResBody> {
+    token: String,
+    _resbody: PhantomData<ResBody>,
 }
 
 #[derive(Debug, Deserialize)]
-struct GHParams {
+struct Query {
     token: String,
 }
 
-impl<S, ReqBody> Service<Request<ReqBody>> for TokenMiddleware<S>
-where
-    S: Service<Request<ReqBody>, Response = Response>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = TokenFuture<S::Future>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+impl<ResBody> Token<ResBody> {
+    pub fn new(token: String) -> Self {
+        Self {
+            token,
+            _resbody: PhantomData,
+        }
     }
+}
 
-    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
-        let mut is_ok = false;
-        if let Some(params) = request.uri().query() {
-            if let Ok(params) = serde_urlencoded::from_str::<GHParams>(params) {
-                if Some(params.token) == CONFIG.token {
-                    is_ok = true;
+impl<ResBody> Clone for Token<ResBody> {
+    fn clone(&self) -> Self {
+        Self {
+            token: self.token.clone(),
+            _resbody: PhantomData,
+        }
+    }
+}
+
+impl<B, ResBody> ValidateRequest<B> for Token<ResBody>
+where
+    ResBody: Default,
+{
+    type ResponseBody = ResBody;
+    fn validate(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
+        if let Some(query) = request.uri().query() {
+            if let Ok(query) = serde_urlencoded::from_str::<Query>(query) {
+                if query.token == self.token {
+                    return Ok(());
                 }
             }
         }
-        let response_future = self.inner.call(request);
-        TokenFuture {
-            response_future,
-            is_ok,
-        }
-    }
-}
-
-#[pin_project]
-pub struct TokenFuture<F> {
-    #[pin]
-    response_future: F,
-    is_ok: bool,
-}
-
-impl<F, E> Future for TokenFuture<F>
-where
-    F: Future<Output = Result<Response, E>>,
-{
-    type Output = F::Output;
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
-        if !this.is_ok.to_owned() {
-            return Poll::Ready(Ok(StatusCode::NOT_FOUND.into_response()));
-        }
-        let res = ready!(this.response_future.poll(cx)?);
-        Poll::Ready(Ok(res))
+        let mut res = Response::default();
+        *res.status_mut() = StatusCode::NOT_FOUND;
+        Err(res)
     }
 }
